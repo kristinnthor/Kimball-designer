@@ -1,0 +1,60 @@
+name: Release
+
+# Tag vX.Y.Z on main to publish a GitHub release with the skill zip attached.
+# Run manually (workflow_dispatch) for a dry run: builds and uploads the zip as
+# a workflow artifact without creating a release.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check
+        run: npm run typecheck && npm test
+      - name: Skill bundle is up to date
+        run: npm run verify:skill
+      - name: Versions match the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          node -e "
+            const v='$TAG', f=require('fs');
+            const pkg=JSON.parse(f.readFileSync('package.json')).version;
+            const plugin=JSON.parse(f.readFileSync('plugin/.claude-plugin/plugin.json')).version;
+            if (pkg!==v || plugin!==v) { console.error('Version mismatch: tag', v, 'package', pkg, 'plugin', plugin); process.exit(1); }"
+      - name: Package skill
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p dist-release
+          (cd plugin/skills && zip -qr "../../dist-release/kimball-designer-skill-${VERSION}.zip" kimball-designer)
+          echo "zip=dist-release/kimball-designer-skill-${VERSION}.zip" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Upload artifact (dry run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kimball-designer-skill
+          path: ${{ steps.pkg.outputs.zip }}
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="docs/releases/v${{ steps.pkg.outputs.version }}.md"
+          [ -f "$NOTES" ] || NOTES=/dev/null
+          gh release create "$GITHUB_REF_NAME" "${{ steps.pkg.outputs.zip }}" \
+            --title "Kimball Designer $GITHUB_REF_NAME" --notes-file "$NOTES" --verify-tag

@@ -74,7 +74,9 @@ The bus matrix and the bubble diagrams are **derived** from `processes[].dimensi
 
 Requests whose `Host` is not `127.0.0.1:<port>`/`localhost:<port>` or whose `Origin` is foreign are rejected (DNS-rebinding protection). Bodies are capped at 5 MB.
 
-Conflict handling: the UI debounces saves (~600 ms). When a poll reports a newer mtime than the last write the UI made, it reloads from disk if there are no unsaved local edits, otherwise it asks the user which version to keep.
+Conflict handling: the UI debounces saves (~600 ms). When a poll reports a newer mtime than the last write the UI made, it reloads from disk if there are no unsaved local edits, otherwise it asks the user which version to keep. PUTs carry the base mtime and get 409 if the file changed.
+
+**Known limitation:** the mtime check and the write are not atomic, so an outside edit that lands in the few milliseconds between them can be overwritten. The window is small and the skill re-reads the file before every batch of edits. A lock file would close it if this ever shows up in practice.
 
 ## UI structure
 
