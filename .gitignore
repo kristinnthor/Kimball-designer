@@ -12,3 +12,4 @@ Thumbs.db
 # local scratch projects
 /kimball/
 *.local.kimball.json
+dist-release/

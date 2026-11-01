@@ -144,7 +144,9 @@ export function ReviewPhase() {
             ? `Claude can read ${sync.fileName ?? 'the project file'} directly. Try: "Review my Kimball project, fix the warnings with me and render the deliverables."`
             : 'Export the project file into your repository, then ask Claude: "Use the kimball-designer skill to review kimball/project.kimball.json and render the deliverables."'}
         </SectionHead>
-        <pre className="summary">{summary}</pre>
+        <pre className="summary" tabIndex={0} aria-label="Project summary for Claude">
+          {summary}
+        </pre>
       </section>
     </PhaseFrame>
   );

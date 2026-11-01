@@ -32,12 +32,13 @@ CLI commands: `init`, `summary`, `validate`, `render`, `serve`, `guide`, `exampl
 
 ### 1. Orient (first message)
 
-1. Look for an existing project file: `**/*.kimball.json` (ignore `node_modules`).
-   - **Found** → run `$KD summary <file>`, tell the user in two or three sentences where the project stands, and continue at the suggested next phase.
+1. Look for an existing project file: `**/*.kimball.json`, ignoring `node_modules/`, `.claude/`, this skill's own folder (its `examples/` are not the user's project) and `kimball/example.kimball.json` (a demo). Call the file you work on `<file>` from here on.
+   - **Found one** → run `$KD summary <file>`, tell the user in two or three sentences where the project stands, and continue at the suggested next phase.
+   - **Found several** → list them and ask which one to continue.
    - **Not found** → ask for the project name and its business purpose in one short message, then run `$KD init kimball/project.kimball.json --name "<name>"` and record the purpose.
-   - The user only wants to *see* how it works → `$KD init kimball/example.kimball.json --example retail` (or `saas`, `healthcare`) and walk them through it.
-2. **Offer the guided UI** (recommended). Start it in the background and give the user the URL:
-   `$KD serve kimball/project.kimball.json --open` (default port 4178; use `--port` if busy).
+   - The user only wants to *see* how it works → `$KD init kimball/example.kimball.json --example retail` (or `saas`, `healthcare`), use that as `<file>`, and say clearly that it is example data, not their business.
+2. **Offer the guided UI** (recommended). Start it in the background on the same `<file>` and give the user the URL:
+   `$KD serve <file> --open` (default port 4178; use `--port` if busy).
    Explain once: *"You can type in the browser or answer me here — we're both editing the same file, and the UI updates live."*
 
 ### 2. Work through the ten phases

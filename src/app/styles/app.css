@@ -907,6 +907,10 @@ a {
   box-shadow: inset 0 0 0 1px var(--kd-fact);
 }
 
+.option[aria-pressed='true'] span {
+  color: var(--kd-ink-2);
+}
+
 /* Tables */
 .table-wrap {
   overflow-x: auto;

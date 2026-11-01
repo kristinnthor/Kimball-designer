@@ -36,8 +36,11 @@ Don't write "KimballDesigner", "Kimball designer" or "the Kimball tool".
 | [`logo-mark.svg`](logo-mark.svg) | App icon, favicon, avatars, small sizes (≥ 16 px) |
 | [`logo-lockup.svg`](logo-lockup.svg) | README header and documents on light backgrounds |
 | [`logo-lockup-dark.svg`](logo-lockup-dark.svg) | Dark backgrounds |
-| [`social-preview.svg`](social-preview.svg) | GitHub social preview / link cards (1280 × 640) |
+| [`social-preview.svg`](social-preview.svg) · [`.png`](social-preview.png) | GitHub social preview / link cards (1280 × 640) |
+| [`logo-mark-512.png`](logo-mark-512.png) | Raster icon (avatars, marketplaces) |
 | [`favicon.svg`](favicon.svg) | Browser tab icon |
+
+PNGs are rendered from the SVGs with `node scripts/render-brand.mjs`.
 
 **Clear space:** at least ¼ of the mark's width on every side.
 **Minimum size:** mark 16 px; lockup 160 px wide.

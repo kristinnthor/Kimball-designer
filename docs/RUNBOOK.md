@@ -28,7 +28,7 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M1 · Core engine** | ✅ | #8 model · #9 validation · #10 bus matrix · #11 bubble · #12 req. doc · #13 CLI · #14 serve |
 | **M2 · Guided UI** | ✅ | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
 | **M3 · Claude skill** | 🔄 | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
-| **M4 · Quality & release** | ⏳ | #33 e2e · #34 a11y · #35 Pages 🙋 · #36 release |
+| **M4 · Quality & release** | 🔄 | #33 e2e · #34 a11y · #35 Pages 🙋 · #36 release |
 
 ## 3. How work flows
 
@@ -89,7 +89,9 @@ npm run dev            # UI dev server (http://localhost:5173)
 npm test               # unit tests
 npm run typecheck      # strict TypeScript
 npm run build:skill    # rebuild ui/index.html + scripts/kimball.mjs inside the skill
-npm run check          # everything CI runs
+npm run check          # everything CI runs (except e2e)
+npx playwright install chromium  # once
+npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
 ```
 
 ## 5. Decisions awaiting the owner
@@ -98,8 +100,9 @@ npm run check          # everything CI runs
 |---|---|---|---|
 | D1 | **Licence** | MIT (most permissive, common for dev tools) | MIT |
 | D2 | **Brand approval** — name, logo, palette in [`brand/BRAND.md`](../brand/BRAND.md) | Approve as is | Keep as is |
-| D3 | **Publish hosted UI on GitHub Pages** (#35) — Settings → Pages → Source *GitHub Actions*, then add repo variable `DEPLOY_PAGES=true` | Yes, after v1.0 e2e tests pass | Not published |
-| D4 | **Social preview image** — upload `brand/social-preview.png` in Settings → General → Social preview (cannot be done via API) | Upload | GitHub default card |
+| D3 | **Publish hosted UI on GitHub Pages** (#35) — Settings → Pages → Source *GitHub Actions*, then add repo variable `DEPLOY_PAGES=true`. The workflow is ready. | Yes — e2e and axe tests now pass | Not published |
+| D4 | **Social preview image** — upload [`brand/social-preview.png`](../brand/social-preview.png) in Settings → General → Social preview (cannot be done via API) | Upload | GitHub default card |
+| D6 | **Cut v1.0.0** (#36) — first do a live install test (`/plugin marketplace add kristinnthor/Kimball-designer`, then ask Claude to start a project), then run `node scripts/bump-version.mjs 1.0.0`, `npm run build:skill`, commit, `git tag v1.0.0`, `git push --follow-tags`. The release workflow publishes the zip. | Release after your smoke test | Stays at 0.1.0 |
 | D5 | **Branch protection on `main`** (require CI + PR) — needs admin; would stop the agent from merging if reviews are required | Require CI only, not reviews, until v1.0 | Unprotected |
 
 ## 6. Troubleshooting
@@ -119,6 +122,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | PR: quality & release — Playwright e2e, axe a11y, Pages workflow (gated), release workflow, social preview PNG (#33–#36) | M4 PR |
 | 2026-11-01 | PR: Claude skill — SKILL.md, references, interview guide, plugin marketplace, evals (#28–#32) | skill PR |
 | 2026-11-01 | Merged: guided UI — 10 phases, coach, bubble diagrams, bus matrix, review/export, live sync; core review fixes (#15–#27) | [#40](https://github.com/kristinnthor/Kimball-designer/pull/40) |
 | 2026-11-01 | Merged: `kimball` CLI and `kimball serve` live-sync server (#13, #14) | [#39](https://github.com/kristinnthor/Kimball-designer/pull/39) |
@@ -138,5 +142,5 @@ Newest first. Every merged PR adds a line.
 
 1. All M0–M3 issues closed; M4 `P0`/`P1` closed.
 2. Update `CHANGELOG.md` (move *Unreleased* to the version), bump `package.json` and `plugin/.claude-plugin/plugin.json`.
-3. Tag `vX.Y.Z` on `main` → release workflow builds, tests and attaches `kimball-designer-skill-vX.Y.Z.zip`.
+3. Run `node scripts/bump-version.mjs X.Y.Z` and `npm run build:skill`, add release notes in `docs/releases/vX.Y.Z.md`, commit, then tag `vX.Y.Z` on `main` and push with `--follow-tags`. The release workflow checks versions, builds, tests and attaches `kimball-designer-skill-X.Y.Z.zip`. Dry run: run the *Release* workflow manually.
 4. Announce install commands in the release notes.

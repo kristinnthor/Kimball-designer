@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - Plugin marketplace packaging (`.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`) and an install guide (#31).
 - Skill evaluation scenarios with a fixture project (#32).
 
+- Playwright end-to-end tests: full wizard flow offline, live sync both ways, conflict resolution (#33).
+- Accessibility: axe checks (WCAG 2.1 AA, serious/critical) on every phase in light and dark themes; keyboard-operable bus matrix; focusable scroll regions; contrast fixes (#34).
+- GitHub Pages workflow, gated on the `DEPLOY_PAGES` repository variable (#35).
+- Release workflow (tag `v*` → GitHub release with the skill zip; manual dry run), `scripts/bump-version.mjs`, draft v1.0.0 release notes, and PNG renders of the brand assets (#36).
+
 ### Fixed
 - Pluralisation in phase details ("business processes").
 - Review feedback on the core engine (wrapping, CSV formula injection, Markdown HTML escaping, id sanitising, duplicate roles, review status, blank scores). Degenerate dimensions are no longer counted as conformed.
