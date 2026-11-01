@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { busMatrixToCsv, busMatrixToHtml, busMatrixToMarkdown, deriveBusMatrix, slugify, type BusMatrixOptions } from '../../core';
 import { BusMatrixGrid } from '../components/BusMatrixGrid';
 import { IconCopy, IconDownload } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, Segmented } from '../components/ui';
-import { copyText, downloadText } from '../lib/files';
+import { copyWithToast, downloadText } from '../lib/files';
 import { goToPhase } from '../store/routing';
 import { useProject } from '../store/store';
-import { pushToast } from '../store/toasts';
 
 type RowOrder = NonNullable<BusMatrixOptions['rowOrder']>;
 type ColumnOrder = NonNullable<BusMatrixOptions['columnOrder']>;
@@ -18,6 +17,11 @@ export function MatrixPhase() {
   const [columnOrder, setColumnOrder] = useState<ColumnOrder>('usage');
   const options: BusMatrixOptions = { rowOrder, columnOrder };
   const m = deriveBusMatrix(project, options);
+  // Sort once per chosen order; re-sorting on every toggle would move the column being clicked.
+  const frozen = useRef<{ order: ColumnOrder; ids: string[] } | null>(null);
+  if (!frozen.current || frozen.current.order !== columnOrder || frozen.current.ids.length === 0) {
+    frozen.current = { order: columnOrder, ids: m.columns.map((c) => c.dimension.id) };
+  }
   const conformed = m.columns.filter((c) => c.conformed).length;
   const base = slugify(project.meta.name, 'project');
 
@@ -76,9 +80,10 @@ export function MatrixPhase() {
               ]}
             />
           </div>
-          <BusMatrixGrid project={project} options={options} />
+          <BusMatrixGrid project={project} options={options} columnIds={frozen.current.ids} />
           <p className="hint" style={{ marginTop: 8 }}>
             Click a cell (or use arrow keys and Space) to toggle. Amber columns are conformed — agree their definitions first.
+            Columns keep their place while you edit; pick an order again to re-sort.
           </p>
           <div className="row" style={{ marginTop: 16 }}>
             <button type="button" className="btn" onClick={() => downloadText(`${base}-bus-matrix.md`, busMatrixToMarkdown(project, options), 'text/markdown')}>
@@ -93,7 +98,7 @@ export function MatrixPhase() {
             <button
               type="button"
               className="btn ghost"
-              onClick={async () => pushToast((await copyText(busMatrixToMarkdown(project, options))) ? 'Bus matrix copied as Markdown.' : 'Copy failed.', 'success')}
+              onClick={() => void copyWithToast(busMatrixToMarkdown(project, options), 'Bus matrix copied as Markdown.')}
             >
               <IconCopy /> Copy Markdown
             </button>

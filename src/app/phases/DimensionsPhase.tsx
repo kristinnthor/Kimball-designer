@@ -15,6 +15,8 @@ import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, RemoveButton, SectionHead, Select, TagInput, TextArea, TextInput, ToggleChip } from '../components/ui';
 import { DIMENSION_DESCRIPTION_EXAMPLES, attributePlaceholder, hierarchyPlaceholder, pick, rolePlaceholder } from '../lib/placeholders';
 import { goToPhase } from '../store/routing';
+import { removeWithUndo } from '../actions';
+import { markAdded, wasJustAdded } from '../lib/justAdded';
 import { update, useProject } from '../store/store';
 
 const COMMON: { name: string; kind: DimensionKind }[] = [
@@ -32,7 +34,11 @@ const COMMON: { name: string; kind: DimensionKind }[] = [
 export function DimensionsPhase() {
   const project = useProject();
   const names = new Set(project.dimensions.map((d) => d.name.trim().toLowerCase()));
-  const add = (name = '', kind: DimensionKind = 'standard') => update((d) => void d.dimensions.push(createDimension({ name, kind })));
+  const add = (name = '', kind: DimensionKind = 'standard') => {
+    const dim = createDimension({ name, kind });
+    if (!name) markAdded(dim.id);
+    update((d) => void d.dimensions.push(dim));
+  };
 
   return (
     <PhaseFrame
@@ -86,9 +92,10 @@ export function DimensionsPhase() {
                     <RemoveButton
                       label={`Remove ${displayName(dim, 'dimension')}`}
                       onClick={() =>
-                        update((d) => {
-                          d.dimensions.splice(i, 1);
+                        removeWithUndo(displayName(dim, 'the dimension'), (d) => {
+                          d.dimensions = d.dimensions.filter((x) => x.id !== dim.id);
                           for (const p of d.processes) p.dimensions = p.dimensions.filter((u) => u.dimensionId !== dim.id);
+                          if (d.physical) delete d.physical.rows[dim.id];
                         })
                       }
                     />
@@ -97,7 +104,7 @@ export function DimensionsPhase() {
                     <TextInput
                       label="Name"
                       value={dim.name}
-                      autoFocus={!dim.name}
+                      autoFocus={wasJustAdded(dim.id)}
                       onChange={(v) => update((d) => void (d.dimensions[i]!.name = v), { coalesce: `dm.${dim.id}.name` })}
                     />
                     <Select label="Kind" value={dim.kind} options={DIMENSION_KINDS} onChange={(v) => update((d) => void (d.dimensions[i]!.kind = v ?? 'standard'))} />
@@ -134,7 +141,7 @@ export function DimensionsPhase() {
                                       <TextInput
                                         aria-label="Attribute name"
                                         placeholder={attributePlaceholder(dim.name, ai)}
-                                        autoFocus={!a.name}
+                                        autoFocus={wasJustAdded(a.id)}
                                         value={a.name}
                                         onChange={(v) => update((d) => void (d.dimensions[i]!.attributes[ai]!.name = v), { coalesce: `at.${a.id}` })}
                                       />
@@ -158,7 +165,12 @@ export function DimensionsPhase() {
                           </div>
                         )}
                         <div>
-                          <button type="button" className="btn sm" onClick={() => update((d) => void d.dimensions[i]!.attributes.push(createAttribute()))}>
+                          <button type="button" className="btn sm" onClick={() => {
+                              const a = createAttribute();
+                              markAdded(a.id);
+                              update((d) => void d.dimensions[i]!.attributes.push(a));
+                            }}
+                          >
                             <IconPlus /> Add attribute
                           </button>
                         </div>
@@ -232,13 +244,29 @@ export function DimensionsPhase() {
                   <div className="grid-2" style={{ marginTop: 16 }}>
                     {p.dimensions.map((u, ui) => {
                       const dim = project.dimensions.find((x) => x.id === u.dimensionId);
+                      if (!dim) {
+                        // A reference left by a hand-edited file: show it so it can be removed (KD003).
+                        return (
+                          <div className="field" key={`${u.dimensionId}-${ui}`}>
+                            <span className="field-label">Missing dimension</span>
+                            <button
+                              type="button"
+                              className="chip missing"
+                              title="No dimension has this id. Click to remove it from the process."
+                              onClick={() => update((d) => void d.processes[pi]!.dimensions.splice(ui, 1))}
+                            >
+                              {u.dimensionId} ×
+                            </button>
+                          </div>
+                        );
+                      }
                       return (
                         <TagInput
                           key={`${u.dimensionId}-${ui}`}
-                          label={`${dim ? displayName(dim) : u.dimensionId} — roles (optional)`}
+                          label={`${displayName(dim)} — roles (optional)`}
                           values={u.roles}
                           onChange={(v) => update((d) => void (d.processes[pi]!.dimensions[ui]!.roles = v))}
-                          placeholder={rolePlaceholder(dim ? isDateDimension(dim) : false, ui)}
+                          placeholder={rolePlaceholder(isDateDimension(dim), ui)}
                         />
                       );
                     })}

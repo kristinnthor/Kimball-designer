@@ -10,11 +10,17 @@ import { PhaseFrame } from '../components/PhaseFrame';
 import { StakeholderInput } from '../components/StakeholderInput';
 import { EmptyState, RemoveButton, SectionHead, Segmented, TagInput, TextArea, ToggleChip } from '../components/ui';
 import { ASSUMPTION_EXAMPLES, QUESTION_EXAMPLES, REQUIREMENT_EXAMPLES, pick } from '../lib/placeholders';
+import { removeWithUndo } from '../actions';
+import { markAdded, wasJustAdded } from '../lib/justAdded';
 import { update, useProject } from '../store/store';
 
 export function RequirementsPhase() {
   const project = useProject();
-  const add = () => update((d) => void d.requirements.push(createRequirement()));
+  const add = () => {
+    const r = createRequirement();
+    markAdded(r.id);
+    update((d) => void d.requirements.push(r));
+  };
 
   return (
     <PhaseFrame phase="requirements">
@@ -42,11 +48,15 @@ export function RequirementsPhase() {
                   options={PRIORITIES}
                   onChange={(v) => update((d) => void (d.requirements[i]!.priority = v))}
                 />
-                <RemoveButton label={`Remove requirement R${i + 1}`} onClick={() => update((d) => void d.requirements.splice(i, 1))} />
+                <RemoveButton
+                  label={`Remove requirement R${i + 1}`}
+                  onClick={() => removeWithUndo(`requirement R${i + 1}`, (d) => void (d.requirements = d.requirements.filter((x) => x.id !== r.id)))}
+                />
               </div>
               <div className="stack">
                 <TextArea
                   label="Business question or need"
+                  autoFocus={wasJustAdded(r.id)}
                   value={r.statement}
                   rows={2}
                   onChange={(v) => update((d) => void (d.requirements[i]!.statement = v), { coalesce: `rq.${r.id}.statement` })}
@@ -58,10 +68,23 @@ export function RequirementsPhase() {
                   onChange={(v) => update((d) => void (d.requirements[i]!.kpis = v))}
                   placeholder={pick(REQUIREMENT_EXAMPLES, i).kpi}
                 />
-                {project.stakeholders.length > 0 && (
-                  <div className="field">
+                {(project.stakeholders.length > 0 || r.stakeholderIds.length > 0) && (
+                  <div className="field" role="group" aria-label={`R${i + 1} raised by`}>
                     <span className="field-label">Raised by</span>
                     <div className="chips">
+                      {r.stakeholderIds
+                        .filter((id) => !project.stakeholders.some((s) => s.id === id))
+                        .map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className="chip missing"
+                            title="This stakeholder no longer exists. Click to remove the link."
+                            onClick={() => update((d) => void (d.requirements[i]!.stakeholderIds = d.requirements[i]!.stakeholderIds.filter((x) => x !== id)))}
+                          >
+                            Missing: {id} ×
+                          </button>
+                        ))}
                       {project.stakeholders.map((s) => {
                         const on = r.stakeholderIds.includes(s.id);
                         return (
@@ -98,7 +121,12 @@ export function RequirementsPhase() {
           <SectionHead
             title="Assumptions"
             actions={
-              <button type="button" className="btn sm" onClick={() => update((d) => void d.assumptions.push(createAssumption()))}>
+              <button type="button" className="btn sm" onClick={() => {
+                  const a = createAssumption();
+                  markAdded(a.id);
+                  update((d) => void d.assumptions.push(a));
+                }}
+              >
                 <IconPlus /> Add
               </button>
             }
@@ -112,6 +140,7 @@ export function RequirementsPhase() {
                   <TextArea
                     rows={1}
                     aria-label={`Assumption ${i + 1}`}
+                    autoFocus={wasJustAdded(a.id)}
                     value={a.text}
                     onChange={(v) => update((d) => void (d.assumptions[i]!.text = v), { coalesce: `as.${a.id}` })}
                     placeholder={pick(ASSUMPTION_EXAMPLES, i)}
@@ -127,7 +156,12 @@ export function RequirementsPhase() {
           <SectionHead
             title="Open questions"
             actions={
-              <button type="button" className="btn sm" onClick={() => update((d) => void d.openQuestions.push(createOpenQuestion()))}>
+              <button type="button" className="btn sm" onClick={() => {
+                  const q = createOpenQuestion();
+                  markAdded(q.id);
+                  update((d) => void d.openQuestions.push(q));
+                }}
+              >
                 <IconPlus /> Add
               </button>
             }
@@ -149,6 +183,7 @@ export function RequirementsPhase() {
                   <TextArea
                     rows={1}
                     aria-label={`Open question ${i + 1}`}
+                    autoFocus={wasJustAdded(q.id)}
                     value={q.text}
                     onChange={(v) => update((d) => void (d.openQuestions[i]!.text = v), { coalesce: `oq.${q.id}.text` })}
                     placeholder={pick(QUESTION_EXAMPLES, i)}

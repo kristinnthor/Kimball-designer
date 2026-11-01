@@ -68,7 +68,8 @@ export const store = {
     set({
       project,
       past: options.resetHistory ? [] : [...state.past, state.project].slice(-HISTORY_LIMIT),
-      future: options.resetHistory ? [] : state.future,
+      // Redo after a replacement would jump back over it (and wipe an edit made by Claude).
+      future: [],
       started: true,
     });
   },

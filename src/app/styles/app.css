@@ -1260,19 +1260,20 @@ table.data .select {
   margin-top: 1px;
 }
 
+/* Paper-coloured text: white on the light theme's dark shades, near-black on the dark theme's light ones. */
 .mark.ok {
   background: var(--kd-success);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.error {
   background: var(--kd-danger);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.warning {
   background: var(--kd-warning);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.info {
@@ -1416,7 +1417,7 @@ table.data .select {
 
 .toast.error {
   background: var(--kd-danger);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .toast button {
@@ -1803,4 +1804,11 @@ table.data.advice td {
 
 .advice-table li .badge {
   justify-content: center;
+}
+
+.chip.missing {
+  border-style: dashed;
+  border-color: var(--kd-warning);
+  color: var(--kd-warning);
+  background: var(--kd-warning-soft);
 }

@@ -1,13 +1,33 @@
 import { useRef, type KeyboardEvent } from 'react';
-import { deriveBusMatrix, displayName, priorityScore, type BusMatrixOptions, type KimballProject } from '../../core';
+import { deriveBusMatrix, displayName, priorityScore, type BusMatrix, type BusMatrixOptions, type KimballProject } from '../../core';
 import { update } from '../store/store';
 
 /**
  * Interactive enterprise bus matrix. Cells are a roving-tabindex grid:
  * arrow keys move, Space/Enter toggles whether the process uses the dimension.
  */
-export function BusMatrixGrid({ project, options, editable = true }: { project: KimballProject; options?: BusMatrixOptions; editable?: boolean }) {
-  const m = deriveBusMatrix(project, options);
+/** Puts the columns in the given order; columns not listed (new dimensions) go last. */
+function orderColumns(m: BusMatrix, ids: string[]): BusMatrix {
+  const pos = new Map(ids.map((id, i) => [id, i]));
+  const rank = (i: number) => pos.get(m.columns[i]!.dimension.id) ?? ids.length + i;
+  const order = m.columns.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
+  return { columns: order.map((i) => m.columns[i]!), rows: m.rows.map((r) => ({ ...r, cells: order.map((i) => r.cells[i]!) })) };
+}
+
+export function BusMatrixGrid({
+  project,
+  options,
+  editable = true,
+  columnIds,
+}: {
+  project: KimballProject;
+  options?: BusMatrixOptions;
+  editable?: boolean;
+  /** Fixed column order, so toggling a cell doesn't re-sort the columns under the pointer. */
+  columnIds?: string[];
+}) {
+  const derived = deriveBusMatrix(project, options);
+  const m = columnIds ? orderColumns(derived, columnIds) : derived;
   const tableRef = useRef<HTMLTableElement>(null);
 
   const toggle = (processId: string, dimensionId: string) =>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CoachPanel } from './components/CoachPanel';
 import { DemoBar } from './components/DemoBar';
 import { Header } from './components/Header';
@@ -35,14 +35,22 @@ export function App() {
     }
   }, [phase, started, help]);
 
+  const firstPhase = useRef(true);
   useEffect(() => {
-    document.getElementById('kd-main')?.scrollTo({ top: 0 });
+    const main = document.getElementById('kd-main');
+    const focusedInside = !!main?.contains(document.activeElement) && document.activeElement !== main;
+    if (!focusedInside) main?.scrollTo({ top: 0 });
+    // Move focus to the new phase so keyboard and screen-reader users aren't left on a removed button.
+    if (firstPhase.current) firstPhase.current = false;
+    else if (!main?.contains(document.activeElement) || document.activeElement === document.body) main?.focus({ preventScroll: true });
   }, [phase]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest('input, textarea, select')) return;
+      // Text fields have their own undo; checkboxes, selects and buttons use the project's.
+      const textEntry = target.closest('textarea, [contenteditable="true"], input');
+      if (textEntry && !(textEntry instanceof HTMLInputElement && ['checkbox', 'radio', 'button', 'submit', 'range', 'color', 'file'].includes(textEntry.type))) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) store.redo();

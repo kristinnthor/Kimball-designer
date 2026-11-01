@@ -41,12 +41,11 @@ import {
 import { IconCopy, IconDownload, IconSparkle } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, SectionHead, Segmented, TagInput } from '../components/ui';
-import { copyText, downloadBlob, downloadText } from '../lib/files';
+import { copyWithToast, downloadBlob, downloadText } from '../lib/files';
 import { createZip } from '../lib/zip';
 import { goToPhase } from '../store/routing';
 import { update, useProject } from '../store/store';
 import { useSyncStatus } from '../store/sync';
-import { pushToast } from '../store/toasts';
 
 const ROLE_LABEL: Record<PhysicalColumn['role'], string> = {
   'surrogate-key': 'PK',
@@ -71,10 +70,7 @@ function setPhysical(recipe: (s: PhysicalSettings) => void) {
 const formatCell = (v: Cell, pretty = false) =>
   v === null ? '–' : typeof v === 'boolean' ? (v ? 'true' : 'false') : typeof v === 'number' && pretty ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(v);
 
-async function copy(text: string, what: string) {
-  const ok = await copyText(text);
-  pushToast(ok ? `${what} copied.` : 'Copy failed. Select the text and copy it instead.', ok ? 'success' : 'error');
-}
+const copy = (text: string, what: string) => copyWithToast(text, `${what} copied.`);
 
 // ─── Settings ───
 

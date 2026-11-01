@@ -90,7 +90,7 @@ function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string) 
 }
 
 /** Multi-line text that grows with its content. `rows` is the minimum height. */
-export function TextArea({ label, help, value, onChange, placeholder, mono, rows = 3, className, ...rest }: TextProps & { rows?: number }) {
+export function TextArea({ label, help, value, onChange, placeholder, mono, rows = 3, className, autoFocus, ...rest }: TextProps & { rows?: number }) {
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(ref, value);
@@ -102,6 +102,7 @@ export function TextArea({ label, help, value, onChange, placeholder, mono, rows
       value={value}
       rows={rows}
       placeholder={placeholder}
+      autoFocus={autoFocus}
       aria-label={label ? undefined : rest['aria-label']}
       onChange={(e) => onChange(e.target.value)}
     />
@@ -327,21 +328,24 @@ export function TagInput({
   const [draft, setDraft] = useState('');
   const id = useId();
   const commit = () => {
-    const parts = draft
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .filter((s) => !values.includes(s));
+    const parts = [
+      ...new Set(
+        draft
+          .split(/[,\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ].filter((s) => !values.includes(s));
     if (parts.length) onChange([...values, ...parts]);
     setDraft('');
   };
   return (
     <Field label={label} help={help} htmlFor={id} hideLabel={hideLabel}>
       <div className="tag-input">
-        {values.map((v) => (
-          <span className="tag" key={v}>
+        {values.map((v, i) => (
+          <span className="tag" key={`${i}-${v}`}>
             {v}
-            <button type="button" aria-label={`Remove ${v}`} onClick={() => onChange(values.filter((x) => x !== v))}>
+            <button type="button" aria-label={`Remove ${v}`} onClick={() => onChange(values.filter((_, j) => j !== i))}>
               ×
             </button>
           </span>
@@ -353,10 +357,12 @@ export function TagInput({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter' || e.key === ',') {
               e.preventDefault();
               commit();
-            } else if (e.key === 'Backspace' && !draft && values.length) {
+            } else if (e.key === 'Backspace' && !draft && values.length && !e.repeat) {
+              // Not on key repeat: holding Backspace to clear the draft must not eat saved tags.
               onChange(values.slice(0, -1));
             }
           }}
@@ -434,30 +440,72 @@ export function SectionHead({ title, children, actions }: { title: string; child
 export function Menu({ label, icon, children }: { label: string; icon?: ReactNode; children: (close: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const items = () => [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
   useEffect(() => {
     if (!open) return;
+    // Focus moves into the menu, as in the WAI-ARIA menu button pattern.
+    items()[0]?.focus();
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+  const close = (refocus = false) => {
+    setOpen(false);
+    if (refocus) trigger.current?.focus();
+  };
   return (
-    <div className="menu" ref={ref}>
-      <button type="button" className="btn ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+    <div
+      className="menu"
+      ref={ref}
+      onBlur={(e) => {
+        if (open && !ref.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onKeyDown={(e) => {
+        if (!open) return;
+        const list = items();
+        const at = list.indexOf(document.activeElement as HTMLElement);
+        const move = (i: number) => list[(i + list.length) % list.length]?.focus();
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close(true);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          move(at + 1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          move(at - 1);
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          move(0);
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          move(list.length - 1);
+        }
+      }}
+    >
+      <button
+        ref={trigger}
+        type="button"
+        className="btn ghost"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && !open) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
         {icon}
         <span>{label}</span>
       </button>
       {open && (
-        <div className="menu-list" role="menu">
-          {children(() => setOpen(false))}
+        <div className="menu-list" role="menu" aria-label={label}>
+          {children(() => close(true))}
         </div>
       )}
     </div>

@@ -5,6 +5,8 @@ import { PriorityGrid } from '../components/PriorityGrid';
 import { StakeholderInput } from '../components/StakeholderInput';
 import { EmptyState, RemoveButton, ScoreInput, SectionHead, TagInput, TextArea, TextInput, ToggleChip } from '../components/ui';
 import { PROCESS_DESCRIPTION_EXAMPLES, SOURCE_EXAMPLES, pick } from '../lib/placeholders';
+import { removeWithUndo } from '../actions';
+import { markAdded, wasJustAdded } from '../lib/justAdded';
 import { update, useProject } from '../store/store';
 
 const COMMON = ['Sales', 'Orders', 'Shipments', 'Inventory snapshot', 'Invoices', 'Payments', 'Returns', 'Web sessions', 'Support tickets'];
@@ -12,7 +14,11 @@ const COMMON = ['Sales', 'Orders', 'Shipments', 'Inventory snapshot', 'Invoices'
 export function ProcessesPhase() {
   const project = useProject();
   const names = new Set(project.processes.map((p) => p.name.trim().toLowerCase()));
-  const add = (name = '') => update((d) => void d.processes.push(createProcess({ name })));
+  const add = (name = '') => {
+    const p = createProcess({ name });
+    markAdded(p.id);
+    update((d) => void d.processes.push(p));
+  };
 
   return (
     <PhaseFrame
@@ -49,16 +55,17 @@ export function ProcessesPhase() {
                   <RemoveButton
                     label={`Remove ${displayName(p, 'process')}`}
                     onClick={() =>
-                      update((d) => {
-                        d.processes.splice(i, 1);
+                      removeWithUndo(displayName(p, 'the process'), (d) => {
+                        d.processes = d.processes.filter((x) => x.id !== p.id);
                         for (const r of d.requirements) r.processIds = r.processIds.filter((x) => x !== p.id);
+                        if (d.physical) delete d.physical.rows[p.id];
                       })
                     }
                   />
                 </div>
                 <div className="stack">
                   <div className="grid-2">
-                    <TextInput label="Name" value={p.name} onChange={set('name')} className="title" placeholder="e.g. Retail sales" autoFocus={!p.name} />
+                    <TextInput label="Name" value={p.name} onChange={set('name')} className="title" placeholder="e.g. Retail sales" autoFocus={wasJustAdded(p.id)} />
                     <StakeholderInput label="Business owner" value={p.owner} onChange={set('owner')} />
                   </div>
                   <TextArea label="Description" rows={2} value={p.description} onChange={set('description')} placeholder={pick(PROCESS_DESCRIPTION_EXAMPLES, i)} />

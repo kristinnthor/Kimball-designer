@@ -12,6 +12,8 @@ import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, RemoveButton, SectionHead, Segmented, Select, TextArea, TextInput } from '../components/ui';
 import { stakeholderDepartment, stakeholderRole } from '../lib/placeholders';
+import { removeWithUndo } from '../actions';
+import { markAdded, wasJustAdded } from '../lib/justAdded';
 import { update, useProject } from '../store/store';
 
 const TYPICAL: { role: string; type: StakeholderType }[] = [
@@ -24,8 +26,11 @@ const TYPICAL: { role: string; type: StakeholderType }[] = [
 export function StakeholdersPhase() {
   const project = useProject();
   const [guideType, setGuideType] = useState<StakeholderType>('executive');
-  const add = (init: Parameters<typeof createStakeholder>[0] = {}) =>
-    update((d) => void d.stakeholders.push(createStakeholder(init)));
+  const add = (init: Parameters<typeof createStakeholder>[0] = {}, focus = true) => {
+    const s = createStakeholder(init);
+    if (focus) markAdded(s.id);
+    update((d) => void d.stakeholders.push(s));
+  };
 
   return (
     <PhaseFrame phase="stakeholders">
@@ -37,7 +42,7 @@ export function StakeholdersPhase() {
               <button type="button" className="btn primary" onClick={() => add()}>
                 <IconPlus /> Add stakeholder
               </button>
-              <button type="button" className="btn" onClick={() => TYPICAL.forEach((t) => add({ role: t.role, type: t.type }))}>
+              <button type="button" className="btn" onClick={() => TYPICAL.forEach((t, i) => add({ role: t.role, type: t.type }, i === 0))}>
                 Add the four typical roles
               </button>
             </>
@@ -62,10 +67,18 @@ export function StakeholdersPhase() {
                 <div className="card-head">
                   <h3>{displayName(s, 'New stakeholder')}</h3>
                   <span className="badge">{optionLabel(STAKEHOLDER_TYPES, s.type)}</span>
-                  <RemoveButton label={`Remove ${displayName(s, 'stakeholder')}`} onClick={() => update((d) => void d.stakeholders.splice(i, 1))} />
+                  <RemoveButton
+                    label={`Remove ${displayName(s, 'stakeholder')}`}
+                    onClick={() =>
+                      removeWithUndo(displayName(s, 'the stakeholder'), (d) => {
+                        d.stakeholders = d.stakeholders.filter((x) => x.id !== s.id);
+                        for (const r of d.requirements) r.stakeholderIds = r.stakeholderIds.filter((x) => x !== s.id);
+                      })
+                    }
+                  />
                 </div>
                 <div className="grid-3">
-                  <TextInput label="Name" value={s.name} onChange={set('name')} placeholder="Full name" autoFocus={!s.name && i === project.stakeholders.length - 1} />
+                  <TextInput label="Name" value={s.name} onChange={set('name')} placeholder="Full name" autoFocus={wasJustAdded(s.id)} />
                   <TextInput label="Role" value={s.role} onChange={set('role')} placeholder={stakeholderRole(s.type, i)} />
                   <TextInput label="Department" value={s.department} onChange={set('department')} placeholder={stakeholderDepartment(s.type, i)} />
                 </div>

@@ -1,4 +1,5 @@
 import { parseProject, type KimballProject } from '../../core';
+import { pushToast } from '../store/toasts';
 
 export function downloadBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -41,6 +42,12 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Copies text and says whether it worked. */
+export async function copyWithToast(text: string, done: string) {
+  const ok = await copyText(text);
+  pushToast(ok ? done : 'Copy failed. Select the text and copy it instead.', ok ? 'success' : 'error');
 }
 
 /** Renders an SVG string to a PNG blob at the given scale. */

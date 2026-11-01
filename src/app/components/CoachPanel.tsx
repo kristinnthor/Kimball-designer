@@ -36,7 +36,7 @@ export function CoachPanel({ phase, onClose }: { phase: PhaseId; onClose: () => 
             {findings.slice(0, 8).map((f, i) => (
               <li key={`${f.code}-${f.target.id ?? i}`}>
                 <span className={`mark ${f.severity}`} aria-hidden="true">
-                  {f.severity === 'error' ? '!' : f.severity === 'warning' ? '!' : 'i'}
+                  {f.severity === 'error' ? '×' : f.severity === 'warning' ? '!' : 'i'}
                 </span>
                 <span>
                   {f.message} <span className="sr-only">({f.severity})</span>

@@ -4,6 +4,7 @@ import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, RemoveButton, Select, TextArea, TextInput } from '../components/ui';
 import { factPlaceholder } from '../lib/placeholders';
 import { goToPhase } from '../store/routing';
+import { markAdded, wasJustAdded } from '../lib/justAdded';
 import { update, useProject } from '../store/store';
 
 export function FactsPhase() {
@@ -30,7 +31,11 @@ export function FactsPhase() {
       ) : (
         <div className="stack">
           {project.processes.map((p, pi) => {
-            const addFact = () => update((d) => void d.processes[pi]!.facts.push(createMeasure()));
+            const addFact = () => {
+              const m = createMeasure();
+              markAdded(m.id);
+              update((d) => void d.processes[pi]!.facts.push(m));
+            };
             return (
               <div className="card accent-fact" key={p.id}>
                 <div className="card-head">
@@ -68,7 +73,7 @@ export function FactsPhase() {
                               return (
                                 <tr key={f.id}>
                                   <td>
-                                    <TextInput aria-label="Fact name" value={f.name} onChange={set('name')} placeholder={example.name} autoFocus={!f.name} />
+                                    <TextInput aria-label="Fact name" value={f.name} onChange={set('name')} placeholder={example.name} autoFocus={wasJustAdded(f.id)} />
                                   </td>
                                   <td>
                                     <Select

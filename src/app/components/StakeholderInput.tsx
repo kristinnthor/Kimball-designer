@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { STAKEHOLDER_TYPES, createStakeholder, optionLabel, type StakeholderType } from '../../core';
 import { update, useProject } from '../store/store';
+import { pushToast } from '../store/toasts';
 import { ComboInput } from './ui';
 
 /**
@@ -42,13 +43,24 @@ export function StakeholderInput({
       <button
         type="button"
         className="btn link"
-        onClick={() => update((d) => void d.stakeholders.push(createStakeholder({ name, type: newType })))}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          update((d) => void d.stakeholders.push(createStakeholder({ name, type: newType })));
+          pushToast(`Added ${name} to the stakeholders.`, 'success');
+        }}
       >
         + Add “{name}” to stakeholders
       </button>
     ) : undefined;
   return (
-    <div onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} className="field-wrap">
+    <div
+      className="field-wrap"
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        // Focus moving to the "Add" button stays inside: keep the button rendered so its click lands.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <ComboInput
         label={label}
         aria-label={ariaLabel}
