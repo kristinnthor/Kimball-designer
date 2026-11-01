@@ -17,14 +17,15 @@
     "build:web": "vite build --mode web",
     "build:ui": "vite build --mode skill",
     "build:cli": "node scripts/build-cli.mjs",
-    "build:skill": "npm run build:ui && npm run build:cli && node scripts/sync-skill-assets.mjs",
+    "build:skill": "npm run build:ui && npm run build:cli && node scripts/sync-skill-assets.mjs && node scripts/build-docs.mjs",
     "build": "npm run build:web && npm run build:skill",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm test && npm run build",
     "verify:skill": "npm run build:skill && git diff --exit-code --stat -- plugin/",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:docs": "node scripts/build-docs.mjs"
   },
   "dependencies": {
     "immer": "^11.2.9",

@@ -104,8 +104,19 @@ export const IconSparkle = (p: IconProps) => (
 );
 export const IconCoach = (p: IconProps) => (
   <Icon {...p}>
+    <path d="M9 18h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" />
+  </Icon>
+);
+export const IconHelp = (p: IconProps) => (
+  <Icon {...p}>
     <circle cx="12" cy="12" r="9" />
     <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4M12 17h.01" />
+  </Icon>
+);
+export const IconPlay = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7 4.5v15l12-7.5z" />
   </Icon>
 );
 export const IconClose = (p: IconProps) => (

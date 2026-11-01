@@ -27,7 +27,7 @@ flowchart LR
 
 | Component | Path | Runtime | Responsibility |
 |---|---|---|---|
-| **Core engine** | `src/core/` | Pure TS (browser + Node) | Types, factories, normalisation, JSON Schema, validation rules, phase status, bus matrix derivation, bubble layout, exporters (Markdown, CSV, HTML, SVG, Mermaid), coach guidance content, example projects, zip writer |
+| **Core engine** | `src/core/` | Pure TS (browser + Node) | Types, factories, normalisation, JSON Schema, validation rules, phase status, bus matrix derivation, bubble layout, exporters (Markdown, CSV, HTML, SVG, Mermaid), coach guidance and help content (one source for the Help page, `docs/USER-GUIDE.md` and the skill reference), example projects, zip writer |
 | **Guided UI** | `src/app/` | Browser (React 19) | Phase stepper, editors for each phase, coach panel, bubble diagram & bus matrix views, review/export, persistence & sync |
 | **CLI** | `src/cli/` | Node ≥ 18 | `init`, `validate`, `summary`, `render`, `serve` |
 | **Sync server** | `src/cli/server.ts` | Node ≥ 18 | Serves the single-file UI and a small JSON API for the project file |
@@ -82,14 +82,14 @@ Conflict handling: the UI debounces saves (~600 ms). When a poll reports a newer
 
 ```text
 src/app/
-├── main.tsx, App.tsx          shell: header, stepper, phase outlet, coach panel
-├── store/                     store (immer + undo), persistence (localStorage, file, server sync)
+├── main.tsx, App.tsx          shell: header, stepper, phase outlet, coach panel, Help page
+├── store/                     store (immer + undo), persistence (localStorage, file, server sync), routing, demo state
 ├── phases/                    one component per phase
-├── components/                form controls, list editors, BubbleDiagram, BusMatrixGrid, PriorityGrid…
+├── components/                form controls, list editors, BubbleDiagram, BusMatrixGrid, PriorityGrid, HelpPage, DemoBar…
 └── styles/                    app.css (consumes brand/tokens.css)
 ```
 
-Navigation is hash-based (`#/phase/grain`) so the single HTML file works from `file://`.
+Navigation is hash-based (`#/grain`, `#/help/demos`) so the single HTML file works from `file://`.
 
 ## Quality gates
 

@@ -25,16 +25,20 @@ function start(project: KimballProject) {
   goToPhase(project.meta.currentPhase);
 }
 
-export function newProject(name: string, serverMode: boolean) {
-  if (!confirmReplace(serverMode)) return;
+/** Returns false if the user cancelled. */
+export function newProject(name: string, serverMode: boolean): boolean {
+  if (!confirmReplace(serverMode)) return false;
   start(createProject(name.trim()));
+  return true;
 }
 
-export function startFromExample(id: ExampleInfo['id'], serverMode: boolean) {
-  if (!confirmReplace(serverMode)) return;
+/** Returns false if the user cancelled. */
+export function startFromExample(id: ExampleInfo['id'], serverMode: boolean, announce = true): boolean {
+  if (!confirmReplace(serverMode)) return false;
   const project = loadExample(id, new Date().toISOString());
   start({ ...project, meta: { ...project.meta, currentPhase: 'kickoff' } });
-  pushToast(`Loaded the "${displayName(project.meta)}" example. Explore it, then adapt or start fresh.`, 'success');
+  if (announce) pushToast(`Loaded the "${displayName(project.meta)}" example. Explore it, then adapt or start fresh.`, 'success');
+  return true;
 }
 
 export async function openProjectFile(serverMode: boolean) {

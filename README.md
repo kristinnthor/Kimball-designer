@@ -45,6 +45,19 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 - **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file, or online at [kimball.kristinn.eu](https://kimball.kristinn.eu).
 - **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
 - **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
+- **Help and demos** — a built-in Help page (the **?** button) with guided demos, a guide to every deliverable, a glossary and an FAQ.
+
+## What you get
+
+At the end you have an agreed, documented high-level dimensional design, the blueprint Kimball asks for before anyone builds a table:
+
+- **A shared language:** agreed business processes, grain and dimensions, which is where most warehouse rework comes from.
+- **A prioritised first release:** every process scored on business value × feasibility.
+- **An architecture that grows without rework:** the bus matrix shows which conformed dimensions to build once and share.
+- **Traceability and honest unknowns:** every business question linked to a process; assumptions and open questions recorded with owners.
+- **A head start on the build:** grain, fact table types, facts with additivity and dimensions with roles feed straight into the detailed design.
+
+The [user guide](docs/USER-GUIDE.md) explains each deliverable: what's in it, who uses it and why it matters. It also covers the ten phases, step-by-step demos, the CLI and an FAQ. The same guide is in the app under **Help**.
 
 ## Screenshots
 
@@ -58,7 +71,7 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 
 > 🚧 **Pre-release.** Everything below works on `main`; follow the road to v1.0 in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1).
 
-**Try it in your browser:** [kimball.kristinn.eu](https://kimball.kristinn.eu). Nothing to install. Your project stays in your browser until you export it.
+**Try it in your browser:** [kimball.kristinn.eu](https://kimball.kristinn.eu). Nothing to install. Your project stays in your browser until you export it. New to it? Click **Take the 3-minute tour** on the start screen, or open **Help → Demos**.
 
 **Install the skill in Claude Code**
 
@@ -95,7 +108,7 @@ node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.k
 | [`src/app/`](src/app) | Guided web UI (React + TypeScript) |
 | [`src/cli/`](src/cli) | `kimball` CLI and local sync server |
 | [`brand/`](brand) | Logo, colours, typography, voice — see [BRAND.md](brand/BRAND.md) |
-| [`docs/`](docs) | [Runbook](docs/RUNBOOK.md), [architecture](docs/ARCHITECTURE.md), [decisions](docs/DECISIONS.md), [methodology](docs/METHODOLOGY.md), [roadmap](docs/ROADMAP.md) |
+| [`docs/`](docs) | [User guide](docs/USER-GUIDE.md), [runbook](docs/RUNBOOK.md), [architecture](docs/ARCHITECTURE.md), [decisions](docs/DECISIONS.md), [methodology](docs/METHODOLOGY.md), [roadmap](docs/ROADMAP.md) |
 
 ## Project status
 

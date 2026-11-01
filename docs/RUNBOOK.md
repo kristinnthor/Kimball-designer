@@ -21,7 +21,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
-> **Current status (2026-11-01):** 34 of 35 backlog issues are done. The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu) (#35). The last one, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
+> **Current status (2026-11-01):** M0–M3 and M5 are done, and the hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu) with a full Help page and guided demos (#45–#47). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
 
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
@@ -32,6 +32,7 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M2 · Guided UI** | ✅ | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
 | **M3 · Claude skill** | ✅ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
 | **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages ✅ · #36 release 🙋 |
+| **M5 · Help & onboarding** | ✅ | #45 help page · #46 guided demos · #47 user guide |
 
 ## 3. How work flows
 
@@ -91,7 +92,8 @@ npm ci                 # install
 npm run dev            # UI dev server (http://localhost:5173)
 npm test               # unit tests
 npm run typecheck      # strict TypeScript
-npm run build:skill    # rebuild ui/index.html + scripts/kimball.mjs inside the skill
+npm run build:skill    # rebuild ui/index.html + scripts/kimball.mjs inside the skill (also runs build:docs)
+npm run build:docs     # regenerate docs/USER-GUIDE.md + the skill reference from src/core/help.ts
 npm run check          # everything CI runs (except e2e)
 npx playwright install chromium  # once
 npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
@@ -113,6 +115,7 @@ npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | CI fails at **"skill bundle is up to date"** | Source changed but `npm run build:skill` output wasn't committed | Run `npm run build:skill`, commit the changed files under `plugin/skills/kimball-designer/` |
+| Test *matches the generated files in the repository* fails | Help content in `src/core/help.ts` changed but the guide wasn't regenerated | `npm run build:docs`, commit `docs/USER-GUIDE.md` and `references/user-guide.md` |
 | CI fails on typecheck only on CI | Different Node/TS version locally | Use Node 20+ and `npm ci` (lockfile) |
 | `kimball serve` says port in use | Another serve instance | `--port 4179`, or stop the other process |
 | UI shows "Offline mode" when served | Opened `ui/index.html` via `file://` instead of the served URL | Use the URL printed by `kimball serve` |
@@ -128,6 +131,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | Help & onboarding (owner request): Help page explaining what the process delivers, guided demos with a demo bar, user guide generated for GitHub and the skill (#45–#47) | [#48](https://github.com/kristinnthor/Kimball-designer/pull/48) |
 | 2026-11-01 | Hosted UI live at kimball.kristinn.eu (#35): owner set the custom domain and uploaded the social preview; Pages source switched to GitHub Actions, `DEPLOY_PAGES=true`, Open Graph tags, no `kimball serve` probe off localhost | [#44](https://github.com/kristinnthor/Kimball-designer/pull/44) |
 | 2026-11-01 | Owner actions posted on #35 (Pages) and #36 (v1.0.0); tracker #1 updated | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |
 | 2026-11-01 | Merged: quality & release — Playwright e2e, axe a11y (both themes), Pages workflow (gated), release workflow, social preview PNG (#33, #34; #35/#36 ready for owner) | [#42](https://github.com/kristinnthor/Kimball-designer/pull/42) |

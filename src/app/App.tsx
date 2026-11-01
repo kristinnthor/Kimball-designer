@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { CoachPanel } from './components/CoachPanel';
+import { DemoBar } from './components/DemoBar';
 import { Header } from './components/Header';
+import { HelpPage } from './components/HelpPage';
 import { Stepper } from './components/Stepper';
 import { Toasts } from './components/Toasts';
 import { Welcome } from './components/Welcome';
 import { PHASE_COMPONENTS } from './phases';
-import { usePhase } from './store/routing';
+import { useDemo } from './store/demo';
+import { useHelpRoute, usePhase } from './store/routing';
 import { store, useStore } from './store/store';
 
 const COACH_KEY = 'kd.coach';
@@ -21,14 +24,16 @@ function readCoachPref(): boolean {
 export function App() {
   const started = useStore((s) => s.started);
   const phase = usePhase();
+  const help = useHelpRoute();
+  const demoActive = useDemo() !== null;
   const [coachOpen, setCoachOpen] = useState(() => readCoachPref() && window.innerWidth > 1180);
 
   // Remember where the user is so Claude (via the project file) knows which phase they're on.
   useEffect(() => {
-    if (started && store.getState().project.meta.currentPhase !== phase) {
+    if (started && help === undefined && store.getState().project.meta.currentPhase !== phase) {
       store.update((d) => void (d.meta.currentPhase = phase), { history: false });
     }
-  }, [phase, started]);
+  }, [phase, started, help]);
 
   useEffect(() => {
     document.getElementById('kd-main')?.scrollTo({ top: 0 });
@@ -61,10 +66,10 @@ export function App() {
       return !open;
     });
 
-  if (!started) {
+  if (help !== undefined || !started) {
     return (
       <>
-        <Welcome />
+        {help !== undefined ? <HelpPage section={help} /> : <Welcome />}
         <Toasts />
       </>
     );
@@ -72,11 +77,12 @@ export function App() {
 
   const Phase = PHASE_COMPONENTS[phase];
   return (
-    <div className={`app ${coachOpen ? '' : 'coach-collapsed'}`}>
+    <div className={`app ${coachOpen ? '' : 'coach-collapsed'}${demoActive ? ' demo-active' : ''}`}>
       <Header onToggleCoach={toggleCoach} coachOpen={coachOpen} />
       <Stepper current={phase} />
       <main className="app-main" id="kd-main" tabIndex={-1}>
         <Phase />
+        <DemoBar phase={phase} />
       </main>
       {coachOpen && <CoachPanel phase={phase} onClose={toggleCoach} />}
       <Toasts />

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { EXAMPLES } from '../../core';
 import { newProject, openProjectFile, startFromExample } from '../actions';
-import { IconArrowRight, IconUpload, LogoMark } from './icons';
+import { startDemo } from '../store/demo';
+import { helpHref } from '../store/routing';
+import { IconArrowRight, IconHelp, IconPlay, IconUpload, LogoMark } from './icons';
 
 export function Welcome() {
   const [name, setName] = useState('');
@@ -74,7 +76,16 @@ export function Welcome() {
             </div>
           </div>
         </div>
-        <p className="hint" style={{ marginTop: 24, textAlign: 'center' }}>
+        <div className="welcome-help">
+          <span>New here?</span>
+          <button type="button" className="btn sm" onClick={() => void startDemo('tour', false)}>
+            <IconPlay /> Take the 3-minute tour
+          </button>
+          <a className="btn sm ghost" href={helpHref()}>
+            <IconHelp /> Help, demos and what you get
+          </a>
+        </div>
+        <p className="hint" style={{ marginTop: 16, textAlign: 'center' }}>
           Working with Claude? Run <code>kimball serve</code> from the skill so this UI and Claude edit the same project file.
         </p>
       </div>

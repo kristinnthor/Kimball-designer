@@ -31,7 +31,8 @@ export function BusMatrixGrid({ project, options, editable = true }: { project: 
   if (m.rows.length === 0 || m.columns.length === 0) return null;
 
   return (
-    <div className="table-wrap">
+    // Read-only cells are disabled, so the scroll region itself must be focusable for keyboard users.
+    <div className="table-wrap" {...(editable ? {} : { tabIndex: 0, role: 'region', 'aria-label': 'Bus matrix (scrollable)' })}>
       <table className="data matrix" ref={tableRef} aria-label="Enterprise bus matrix">
         <thead>
           <tr>

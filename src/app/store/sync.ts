@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { normalizeProject, serializeProject, type KimballProject } from '../../core';
 import { store } from './store';
 import { pushToast } from './toasts';
-import { currentPhase, goToPhase } from './routing';
+import { currentPhase, goToPhase, isHelpOpen } from './routing';
 
 /**
  * Persistence. Two modes:
@@ -98,7 +98,8 @@ function applyRemote(project: KimballProject, mtime: number | null, announce: bo
   setStatus({ state: 'saved', message: null });
   if (announce) {
     pushToast(`Updated from ${status.fileName ?? 'the project file'} — it was edited outside the browser.`, 'info');
-    if (project.meta.currentPhase !== previousPhase && project.meta.currentPhase !== currentPhase()) {
+    // Follow Claude to its phase, but don't pull the user out of Help.
+    if (project.meta.currentPhase !== previousPhase && project.meta.currentPhase !== currentPhase() && !isHelpOpen()) {
       goToPhase(project.meta.currentPhase);
     }
   }

@@ -2304,6 +2304,22 @@ var INTERVIEW_QUESTIONS = {
   ]
 };
 
+// src/core/help.ts
+var HELP_GLOSSARY = [
+  { term: "Business process", definition: "A business event that produces measurements, such as taking an order or shipping a parcel. Each becomes a fact table. Name it as a verb or event, not a department." },
+  { term: "Grain", definition: "What exactly one row of a fact table represents, for example *one row per product on a receipt*. Declared before dimensions and facts, because it decides both." },
+  { term: "Fact", definition: "A numeric measurement taken at the grain, such as quantity or sales amount." },
+  { term: "Dimension", definition: "The descriptive context of a fact: who, what, where, when, why and how. Product, Customer and Date are typical dimensions." },
+  { term: "Conformed dimension", definition: "A dimension shared by two or more business processes with the same meaning and keys. It is what lets reports drill across processes." },
+  { term: "Role-playing dimension", definition: "One dimension used in several roles by the same process, such as Date as *Order date* and *Ship date*." },
+  { term: "Bus matrix", definition: "A grid of business processes (rows) against dimensions (columns). The plan for an enterprise warehouse built one process at a time." },
+  { term: "Bubble diagram", definition: "A high-level picture of one business process with the dimensions that describe it. Used to agree the model with business people." },
+  ...FACT_TABLE_TYPES.map((o) => ({ term: `${o.label} fact table`, definition: o.description })),
+  ...ADDITIVITY.map((o) => ({ term: `${o.label} fact`, definition: o.description })),
+  ...DIMENSION_KINDS.filter((o) => o.value !== "standard").map((o) => ({ term: o.value === "date" ? "Date dimension" : `${o.label} dimension`, definition: o.description })),
+  { term: "Slowly changing dimension (SCD)", definition: `How a dimension attribute keeps history when it changes. ${SCD_TYPES.map((o) => `${o.label}: ${o.description.replace(/\.$/, "")}`).join(". ")}.` }
+];
+
 // src/cli/io.ts
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
