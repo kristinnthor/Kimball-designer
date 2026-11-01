@@ -1,0 +1,206 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kristinnthor/Kimball-designer/main/plugin/skills/kimball-designer/schema/kimball-project.schema.json",
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "prj_health_example",
+    "name": "Claims & care analytics",
+    "purpose": "Help a regional health insurer understand cost and utilisation drivers across medical claims, pharmacy, eligibility and prior authorisations.",
+    "sponsor": "Dr. Amara Nwosu, Chief Medical Officer",
+    "scopeIn": "Adjudicated medical and pharmacy claims, monthly member eligibility, prior authorisation requests for all commercial plans.",
+    "scopeOut": "Medicare Advantage plans, provider contracting and capitation payments.",
+    "successCriteria": [
+      "PMPM cost by plan, employer group and provider available monthly",
+      "Prior authorisation turnaround reported against regulatory targets"
+    ],
+    "currentPhase": "review",
+    "createdAt": "2026-11-01T09:00:00.000Z",
+    "updatedAt": "2026-11-01T09:00:00.000Z"
+  },
+  "stakeholders": [
+    { "id": "sh_amara", "name": "Dr. Amara Nwosu", "role": "Chief Medical Officer", "department": "Clinical", "type": "executive", "interviewStatus": "done", "notes": "Focus on avoidable utilisation and chronic conditions." },
+    { "id": "sh_tom", "name": "Tom Halvorsen", "role": "Director, Actuarial", "department": "Finance", "type": "business", "interviewStatus": "done", "notes": "PMPM and trend by plan and employer group." },
+    { "id": "sh_mei", "name": "Mei Chen", "role": "Utilisation management lead", "department": "Clinical operations", "type": "business", "interviewStatus": "done", "notes": "Prior authorisation turnaround is reported manually." },
+    { "id": "sh_raj", "name": "Raj Patel", "role": "Claims systems architect", "department": "IT", "type": "it", "interviewStatus": "done", "notes": "Claims arrive as 837 files and are adjudicated in the core admin system; PBM sends a daily pharmacy file." }
+  ],
+  "requirements": [
+    { "id": "rq_pmpm", "statement": "Which providers and conditions drive the highest cost per member per month?", "kpis": ["PMPM cost", "Allowed amount"], "priority": "must", "stakeholderIds": ["sh_tom", "sh_amara"], "processIds": ["bp_medical_claims", "bp_eligibility"], "notes": "" },
+    { "id": "rq_auth_tat", "statement": "How quickly are prior authorisation requests decided, and how many are denied?", "kpis": ["Days to decision", "Denial rate"], "priority": "must", "stakeholderIds": ["sh_mei"], "processIds": ["bp_prior_auth"], "notes": "Regulatory target: urgent within 72 hours." },
+    { "id": "rq_rx_trend", "statement": "What are the drug spend trends by therapeutic class?", "kpis": ["Pharmacy paid amount", "Cost per script"], "priority": "should", "stakeholderIds": ["sh_tom"], "processIds": ["bp_pharmacy_claims"], "notes": "" },
+    { "id": "rq_employer_trend", "statement": "Is utilisation rising for our largest employer groups?", "kpis": ["Visits per 1,000 members", "PMPM trend"], "priority": "should", "stakeholderIds": ["sh_tom"], "processIds": ["bp_medical_claims", "bp_eligibility"], "notes": "" }
+  ],
+  "processes": [
+    {
+      "id": "bp_medical_claims", "name": "Medical claims",
+      "description": "Adjudicated professional and institutional claim lines.",
+      "owner": "Tom Halvorsen", "sourceSystems": ["Core admin system"],
+      "grain": "One row per adjudicated claim line",
+      "factTableType": "transaction", "businessValue": 5, "feasibility": 4,
+      "facts": [
+        { "id": "ms_billed", "name": "Billed amount", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_allowed", "name": "Allowed amount", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_paid", "name": "Paid amount", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_member_resp", "name": "Member responsibility", "description": "Copay + coinsurance + deductible.", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_units", "name": "Units of service", "description": "", "additivity": "additive", "unit": "units" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Service date", "Paid date"] },
+        { "dimensionId": "dm_member", "roles": [] },
+        { "dimensionId": "dm_provider", "roles": ["Rendering provider", "Billing provider"] },
+        { "dimensionId": "dm_diagnosis", "roles": ["Primary diagnosis"] },
+        { "dimensionId": "dm_procedure", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": [] },
+        { "dimensionId": "dm_claim_number", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_eligibility", "name": "Member eligibility",
+      "description": "Which members are covered under which plan each month — the denominator for PMPM.",
+      "owner": "Tom Halvorsen", "sourceSystems": ["Core admin system"],
+      "grain": "One row per member per coverage month",
+      "factTableType": "periodic-snapshot", "businessValue": 4, "feasibility": 5,
+      "facts": [
+        { "id": "ms_member_months", "name": "Member months", "description": "1 for a full month; prorated for partial months.", "additivity": "additive", "unit": "months" },
+        { "id": "ms_premium", "name": "Premium amount", "description": "", "additivity": "additive", "unit": "currency" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Coverage month"] },
+        { "dimensionId": "dm_member", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": [] },
+        { "dimensionId": "dm_employer", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_pharmacy_claims", "name": "Pharmacy claims",
+      "description": "Filled prescriptions reported by the pharmacy benefit manager.",
+      "owner": "Tom Halvorsen", "sourceSystems": ["PBM daily file"],
+      "grain": "One row per filled prescription",
+      "factTableType": "transaction", "businessValue": 3, "feasibility": 4,
+      "facts": [
+        { "id": "ms_days_supply", "name": "Days supply", "description": "", "additivity": "additive", "unit": "days" },
+        { "id": "ms_qty_dispensed", "name": "Quantity dispensed", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_ingredient_cost", "name": "Ingredient cost", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_rx_paid", "name": "Paid amount", "description": "", "additivity": "additive", "unit": "currency" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Fill date"] },
+        { "dimensionId": "dm_member", "roles": [] },
+        { "dimensionId": "dm_drug", "roles": [] },
+        { "dimensionId": "dm_provider", "roles": ["Prescriber", "Dispensing pharmacy"] },
+        { "dimensionId": "dm_plan", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_prior_auth", "name": "Prior authorisations",
+      "description": "Requests for approval before a service is delivered.",
+      "owner": "Mei Chen", "sourceSystems": ["UM platform"],
+      "grain": "One row per prior authorisation request, updated as it is reviewed and decided",
+      "factTableType": "accumulating-snapshot", "businessValue": 4, "feasibility": 3,
+      "facts": [
+        { "id": "ms_days_to_decision", "name": "Days to decision", "description": "", "additivity": "additive", "unit": "days" },
+        { "id": "ms_requested_units", "name": "Requested units", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_approved_units", "name": "Approved units", "description": "", "additivity": "additive", "unit": "units" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Requested date", "Clinical review date", "Decision date"] },
+        { "dimensionId": "dm_member", "roles": [] },
+        { "dimensionId": "dm_provider", "roles": ["Requesting provider"] },
+        { "dimensionId": "dm_procedure", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": [] },
+        { "dimensionId": "dm_auth_profile", "roles": [] }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dm_date", "name": "Date", "kind": "date", "description": "",
+      "attributes": [
+        { "id": "at_hd_date", "name": "Calendar date", "description": "", "scdType": 0 },
+        { "id": "at_hd_month", "name": "Month", "description": "", "scdType": 0 },
+        { "id": "at_hd_year", "name": "Plan year", "description": "", "scdType": 0 }
+      ],
+      "hierarchies": ["Day → Month → Quarter → Year"]
+    },
+    {
+      "id": "dm_member", "name": "Member", "kind": "standard", "description": "Insured person. Protected health information — restrict access.",
+      "attributes": [
+        { "id": "at_mem_id", "name": "Member id", "description": "", "scdType": 0 },
+        { "id": "at_mem_age_band", "name": "Age band", "description": "", "scdType": 2 },
+        { "id": "at_mem_gender", "name": "Gender", "description": "", "scdType": 1 },
+        { "id": "at_mem_region", "name": "Region", "description": "", "scdType": 2 },
+        { "id": "at_mem_risk", "name": "Risk score band", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_provider", "name": "Provider", "kind": "standard", "description": "Practitioners, facilities and pharmacies.",
+      "attributes": [
+        { "id": "at_prov_npi", "name": "NPI", "description": "", "scdType": 0 },
+        { "id": "at_prov_name", "name": "Provider name", "description": "", "scdType": 1 },
+        { "id": "at_prov_specialty", "name": "Specialty", "description": "", "scdType": 2 },
+        { "id": "at_prov_network", "name": "Network status", "description": "In or out of network.", "scdType": 2 }
+      ],
+      "hierarchies": ["Provider → Specialty"]
+    },
+    {
+      "id": "dm_diagnosis", "name": "Diagnosis", "kind": "standard", "description": "ICD-10-CM codes with condition groupings.",
+      "attributes": [
+        { "id": "at_dx_code", "name": "ICD-10 code", "description": "", "scdType": 0 },
+        { "id": "at_dx_condition", "name": "Condition category", "description": "", "scdType": 1 },
+        { "id": "at_dx_chronic", "name": "Chronic condition flag", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": ["Code → Condition category"]
+    },
+    {
+      "id": "dm_procedure", "name": "Procedure", "kind": "standard", "description": "CPT/HCPCS codes.",
+      "attributes": [
+        { "id": "at_px_code", "name": "Procedure code", "description": "", "scdType": 0 },
+        { "id": "at_px_category", "name": "Service category", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_plan", "name": "Plan", "kind": "standard", "description": "Benefit plan.",
+      "attributes": [
+        { "id": "at_plan_code", "name": "Plan code", "description": "", "scdType": 0 },
+        { "id": "at_plan_type", "name": "Plan type", "description": "HMO, PPO, HDHP.", "scdType": 1 },
+        { "id": "at_plan_metal", "name": "Metal tier", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_employer", "name": "Employer group", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_emp_group", "name": "Group name", "description": "", "scdType": 1 },
+        { "id": "at_emp_size", "name": "Size band", "description": "", "scdType": 2 },
+        { "id": "at_emp_industry", "name": "Industry", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_drug", "name": "Drug", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_drug_ndc", "name": "NDC", "description": "", "scdType": 0 },
+        { "id": "at_drug_name", "name": "Drug name", "description": "", "scdType": 1 },
+        { "id": "at_drug_class", "name": "Therapeutic class", "description": "", "scdType": 1 },
+        { "id": "at_drug_generic", "name": "Generic flag", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": ["NDC → Drug name → Therapeutic class"]
+    },
+    { "id": "dm_claim_number", "name": "Claim number", "kind": "degenerate", "description": "", "attributes": [], "hierarchies": [] },
+    {
+      "id": "dm_auth_profile", "name": "Authorisation profile", "kind": "junk", "description": "Urgency, decision and channel flags.",
+      "attributes": [
+        { "id": "at_ap_urgency", "name": "Urgency", "description": "Urgent or standard.", "scdType": null },
+        { "id": "at_ap_decision", "name": "Decision", "description": "Approved, partially approved, denied, withdrawn.", "scdType": null },
+        { "id": "at_ap_channel", "name": "Submission channel", "description": "", "scdType": null }
+      ],
+      "hierarchies": []
+    }
+  ],
+  "assumptions": [
+    { "id": "as_adjudicated", "text": "Only finally adjudicated claim lines are loaded; adjustments arrive as reversing lines." }
+  ],
+  "openQuestions": [
+    { "id": "oq_phi", "text": "Which roles may see member-level detail versus de-identified aggregates?", "owner": "Dr. Amara Nwosu", "status": "open" }
+  ]
+}

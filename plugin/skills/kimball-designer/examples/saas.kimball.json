@@ -1,0 +1,210 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kristinnthor/Kimball-designer/main/plugin/skills/kimball-designer/schema/kimball-project.schema.json",
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "prj_saas_example",
+    "name": "Subscription analytics",
+    "purpose": "Explain revenue growth and churn for a B2B SaaS product by connecting subscriptions, billing, product usage and support.",
+    "sponsor": "Ruth Okafor, CFO",
+    "scopeIn": "Subscription lifecycle, monthly recurring revenue, invoices and payments, daily product usage per account and feature, support tickets.",
+    "scopeOut": "Marketing attribution and the sales pipeline (CRM opportunities) — planned for phase 2.",
+    "successCriteria": [
+      "Board pack MRR, NRR and churn produced from the warehouse with no spreadsheet adjustments",
+      "Customer Success sees a weekly at-risk list that combines usage, billing and support signals"
+    ],
+    "currentPhase": "review",
+    "createdAt": "2026-11-01T09:00:00.000Z",
+    "updatedAt": "2026-11-01T09:00:00.000Z"
+  },
+  "stakeholders": [
+    { "id": "sh_ruth", "name": "Ruth Okafor", "role": "CFO", "department": "Finance", "type": "executive", "interviewStatus": "done", "notes": "Needs one definition of MRR and NRR the board trusts." },
+    { "id": "sh_marco", "name": "Marco Silva", "role": "Head of Customer Success", "department": "Customer Success", "type": "business", "interviewStatus": "done", "notes": "Wants early churn signals per account." },
+    { "id": "sh_ines", "name": "Inês Moreau", "role": "Product analyst", "department": "Product", "type": "analyst", "interviewStatus": "done", "notes": "Feature adoption today comes from ad-hoc event queries." },
+    { "id": "sh_kai", "name": "Kai Tanaka", "role": "Data platform engineer", "department": "Engineering", "type": "it", "interviewStatus": "done", "notes": "Billing system has a clean change log; product events land in the lake daily." },
+    { "id": "sh_lena", "name": "Lena Fischer", "role": "Head of Support", "department": "Support", "type": "business", "interviewStatus": "skipped", "notes": "Delegated to Marco; ticketing export documented by Kai." }
+  ],
+  "requirements": [
+    { "id": "rq_nrr", "statement": "What is our net revenue retention by signup cohort and plan?", "kpis": ["MRR", "Net revenue retention", "Gross revenue retention"], "priority": "must", "stakeholderIds": ["sh_ruth"], "processIds": ["bp_mrr_snapshot", "bp_subscription_changes"], "notes": "" },
+    { "id": "rq_churn_drivers", "statement": "Which signals predict that an account will churn or downgrade?", "kpis": ["Churned MRR", "Logo churn rate"], "priority": "must", "stakeholderIds": ["sh_marco"], "processIds": ["bp_subscription_changes", "bp_product_usage", "bp_support_tickets"], "notes": "" },
+    { "id": "rq_expansion", "statement": "Which features do expanding accounts adopt first?", "kpis": ["Expansion MRR", "Feature adoption rate"], "priority": "should", "stakeholderIds": ["sh_ines", "sh_marco"], "processIds": ["bp_product_usage", "bp_subscription_changes"], "notes": "" },
+    { "id": "rq_collections", "statement": "Are customers paying on time, and how much is overdue?", "kpis": ["Days sales outstanding", "Overdue amount"], "priority": "should", "stakeholderIds": ["sh_ruth"], "processIds": ["bp_invoicing"], "notes": "" },
+    { "id": "rq_support_speed", "statement": "How fast do we respond to and resolve support tickets for our largest accounts?", "kpis": ["Time to first response", "Time to resolution"], "priority": "could", "stakeholderIds": ["sh_marco"], "processIds": ["bp_support_tickets"], "notes": "" }
+  ],
+  "processes": [
+    {
+      "id": "bp_subscription_changes", "name": "Subscription changes",
+      "description": "New subscriptions, upgrades, downgrades, renewals and cancellations.",
+      "owner": "Ruth Okafor", "sourceSystems": ["Billing system change log"],
+      "grain": "One row per subscription change event",
+      "factTableType": "transaction", "businessValue": 5, "feasibility": 5,
+      "facts": [
+        { "id": "ms_mrr_change", "name": "MRR change", "description": "Positive for new and expansion, negative for contraction and churn.", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_seat_change", "name": "Seat change", "description": "", "additivity": "additive", "unit": "seats" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Effective date"] },
+        { "dimensionId": "dm_account", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": ["Plan before", "Plan after"] },
+        { "dimensionId": "dm_channel", "roles": [] },
+        { "dimensionId": "dm_change_profile", "roles": [] },
+        { "dimensionId": "dm_subscription_id", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_mrr_snapshot", "name": "Monthly recurring revenue",
+      "description": "The recurring revenue position of every active subscription at month end.",
+      "owner": "Ruth Okafor", "sourceSystems": ["Billing system"],
+      "grain": "One row per subscription per month end",
+      "factTableType": "periodic-snapshot", "businessValue": 5, "feasibility": 4,
+      "facts": [
+        { "id": "ms_mrr", "name": "MRR", "description": "", "additivity": "semi-additive", "unit": "currency" },
+        { "id": "ms_seats", "name": "Active seats", "description": "", "additivity": "semi-additive", "unit": "seats" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Month end"] },
+        { "dimensionId": "dm_account", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": [] },
+        { "dimensionId": "dm_channel", "roles": [] },
+        { "dimensionId": "dm_subscription_id", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_invoicing", "name": "Invoicing",
+      "description": "Invoice lines issued to customers.",
+      "owner": "Ruth Okafor", "sourceSystems": ["Billing system", "Payment provider"],
+      "grain": "One row per invoice line",
+      "factTableType": "transaction", "businessValue": 3, "feasibility": 5,
+      "facts": [
+        { "id": "ms_invoice_amount", "name": "Invoice amount", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_tax_amount", "name": "Tax amount", "description": "", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_invoice_discount", "name": "Discount amount", "description": "", "additivity": "additive", "unit": "currency" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Invoice date", "Due date"] },
+        { "dimensionId": "dm_account", "roles": [] },
+        { "dimensionId": "dm_plan", "roles": [] },
+        { "dimensionId": "dm_currency", "roles": [] },
+        { "dimensionId": "dm_invoice_number", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_product_usage", "name": "Product usage",
+      "description": "Daily activity per account and feature, aggregated from product events.",
+      "owner": "Inês Moreau", "sourceSystems": ["Product event stream"],
+      "grain": "One row per account per feature per day",
+      "factTableType": "periodic-snapshot", "businessValue": 4, "feasibility": 3,
+      "facts": [
+        { "id": "ms_active_users", "name": "Active users", "description": "Distinct users; cannot be summed across days or features.", "additivity": "non-additive", "unit": "users" },
+        { "id": "ms_event_count", "name": "Event count", "description": "", "additivity": "additive", "unit": "events" },
+        { "id": "ms_session_minutes", "name": "Session minutes", "description": "", "additivity": "additive", "unit": "minutes" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Activity date"] },
+        { "dimensionId": "dm_account", "roles": [] },
+        { "dimensionId": "dm_feature", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_support_tickets", "name": "Support tickets",
+      "description": "A ticket's journey from opened to resolved.",
+      "owner": "Marco Silva", "sourceSystems": ["Helpdesk"],
+      "grain": "One row per support ticket, updated as it moves from opened to resolved",
+      "factTableType": "accumulating-snapshot", "businessValue": 3, "feasibility": 4,
+      "facts": [
+        { "id": "ms_first_response_hours", "name": "Time to first response", "description": "", "additivity": "additive", "unit": "hours" },
+        { "id": "ms_resolution_hours", "name": "Time to resolution", "description": "", "additivity": "additive", "unit": "hours" },
+        { "id": "ms_reopen_count", "name": "Reopen count", "description": "", "additivity": "additive", "unit": "count" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Opened date", "First response date", "Resolved date"] },
+        { "dimensionId": "dm_account", "roles": [] },
+        { "dimensionId": "dm_agent", "roles": [] },
+        { "dimensionId": "dm_ticket_category", "roles": [] }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dm_date", "name": "Date", "kind": "date", "description": "Calendar day.",
+      "attributes": [
+        { "id": "at_d_date", "name": "Calendar date", "description": "", "scdType": 0 },
+        { "id": "at_d_month", "name": "Month", "description": "", "scdType": 0 },
+        { "id": "at_d_fq", "name": "Fiscal quarter", "description": "", "scdType": 0 }
+      ],
+      "hierarchies": ["Day → Month → Fiscal quarter → Fiscal year"]
+    },
+    {
+      "id": "dm_account", "name": "Customer account", "kind": "standard", "description": "The paying customer organisation.",
+      "attributes": [
+        { "id": "at_acc_id", "name": "Account id", "description": "", "scdType": 0 },
+        { "id": "at_acc_name", "name": "Account name", "description": "", "scdType": 1 },
+        { "id": "at_acc_segment", "name": "Segment", "description": "SMB, mid-market, enterprise.", "scdType": 2 },
+        { "id": "at_acc_industry", "name": "Industry", "description": "", "scdType": 1 },
+        { "id": "at_acc_cohort", "name": "Signup cohort", "description": "Month of first paid subscription.", "scdType": 0 },
+        { "id": "at_acc_csm", "name": "Customer success manager", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_plan", "name": "Plan", "kind": "standard", "description": "Price plan and edition.",
+      "attributes": [
+        { "id": "at_plan_name", "name": "Plan name", "description": "", "scdType": 1 },
+        { "id": "at_plan_edition", "name": "Edition", "description": "", "scdType": 1 },
+        { "id": "at_plan_period", "name": "Billing period", "description": "Monthly or annual.", "scdType": 1 }
+      ],
+      "hierarchies": ["Plan → Edition"]
+    },
+    {
+      "id": "dm_channel", "name": "Sales channel", "kind": "standard", "description": "",
+      "attributes": [{ "id": "at_ch_name", "name": "Channel", "description": "Self-serve, sales-led, partner.", "scdType": 1 }],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_change_profile", "name": "Change profile", "kind": "junk", "description": "Change type, reason and flags combined.",
+      "attributes": [
+        { "id": "at_cp_type", "name": "Change type", "description": "New, expansion, contraction, churn, reactivation.", "scdType": null },
+        { "id": "at_cp_reason", "name": "Cancellation reason", "description": "", "scdType": null },
+        { "id": "at_cp_trial", "name": "From trial flag", "description": "", "scdType": null }
+      ],
+      "hierarchies": []
+    },
+    { "id": "dm_subscription_id", "name": "Subscription id", "kind": "degenerate", "description": "", "attributes": [], "hierarchies": [] },
+    { "id": "dm_invoice_number", "name": "Invoice number", "kind": "degenerate", "description": "", "attributes": [], "hierarchies": [] },
+    {
+      "id": "dm_currency", "name": "Currency", "kind": "standard", "description": "",
+      "attributes": [{ "id": "at_cur_code", "name": "Currency code", "description": "", "scdType": 0 }],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_feature", "name": "Product feature", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_feat_name", "name": "Feature name", "description": "", "scdType": 1 },
+        { "id": "at_feat_area", "name": "Product area", "description": "", "scdType": 2 },
+        { "id": "at_feat_tier", "name": "Minimum edition", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": ["Feature → Product area"]
+    },
+    {
+      "id": "dm_agent", "name": "Support agent", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_agent_name", "name": "Agent name", "description": "", "scdType": 1 },
+        { "id": "at_agent_team", "name": "Team", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_ticket_category", "name": "Ticket category", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_tc_category", "name": "Category", "description": "", "scdType": 1 },
+        { "id": "at_tc_priority", "name": "Priority", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": []
+    }
+  ],
+  "assumptions": [
+    { "id": "as_mrr_def", "text": "MRR excludes one-off services and is normalised from annual plans (annual price ÷ 12)." }
+  ],
+  "openQuestions": [
+    { "id": "oq_multi_sub", "text": "Can one account hold several active subscriptions? Affects account-level churn logic.", "owner": "Kai Tanaka", "status": "open" }
+  ]
+}
