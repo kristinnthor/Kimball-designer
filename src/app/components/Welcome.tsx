@@ -23,6 +23,8 @@ export function Welcome() {
               <span className="stage-chip model">Model</span>
               <span aria-hidden="true">→</span>
               <span className="stage-chip deliver">Deliver</span>
+              <span aria-hidden="true">→</span>
+              <span className="stage-chip build">Build</span>
             </div>
           </div>
         </div>
@@ -37,8 +39,8 @@ export function Welcome() {
           >
             <h2 style={{ fontSize: 20, marginBottom: 6 }}>Start a new project</h2>
             <p className="hint" style={{ marginBottom: 16 }}>
-              Ten short phases take you from kickoff to bubble diagrams and an enterprise bus matrix. Everything stays in
-              your browser until you export it.
+              Short phases take you from kickoff to bubble diagrams, an enterprise bus matrix and a prototype with sample
+              data and SQL. Everything stays in your browser until you export it.
             </p>
             <div className="field">
               <label htmlFor="kd-new-name">Project name</label>

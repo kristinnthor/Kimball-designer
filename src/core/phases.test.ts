@@ -6,13 +6,21 @@ import { tinyProject } from './test-helpers';
 import { loadExample } from './examples';
 
 describe('phases', () => {
-  it('defines every phase once, in order, numbered 1–10', () => {
+  it('defines every phase once, in order, numbered 1–11', () => {
     expect(PHASES.map((p) => p.id)).toEqual([...PHASE_IDS]);
-    expect(PHASES.map((p) => p.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(PHASES.map((p) => p.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(nextPhase('kickoff')).toBe('stakeholders');
-    expect(nextPhase('review')).toBeNull();
+    expect(nextPhase('review')).toBe('prototype');
+    expect(nextPhase('prototype')).toBeNull();
     expect(previousPhase('kickoff')).toBeNull();
     expect(previousPhase('grain')).toBe('processes');
+  });
+
+  it('reports the prototype as ready once every process can be built', () => {
+    const p = loadExample('retail');
+    expect(phaseStatus(p, 'prototype')).toMatchObject({ state: 'complete', done: 4, total: 4 });
+    p.processes[0]!.dimensions = [];
+    expect(phaseStatus(p, 'prototype')).toMatchObject({ state: 'in-progress', done: 3, detail: '3 of 4 fact tables ready to build' });
   });
 
   it('reports a new project as not started', () => {

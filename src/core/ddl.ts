@@ -416,15 +416,40 @@ export function indexAdviceToMarkdown(project: KimballProject, dialect: SqlDiale
     '',
   ];
   for (const t of model.tables) {
-    const rows = advice.filter((a) => a.table === t.name);
-    if (!rows.length) continue;
+    const groups = groupAdvice(advice.filter((a) => a.table === t.name));
+    if (!groups.length) continue;
     out.push(`## ${t.name}`, '', '| When | Columns | Why |', '|---|---|---|');
-    for (const a of rows) {
-      const when = a.when === 'table' ? 'now (table)' : a.when;
-      const cols = a.columns.length ? a.columns.map((c) => `\`${c}\``).join(', ') : '*whole table*';
-      out.push(`| ${when} | ${cols} | ${a.why.replace(/\|/g, '\\|')} |`);
+    for (const g of groups) {
+      const when = g.when === 'table' ? 'now (in CREATE TABLE)' : g.when;
+      const cols = g.columns.length ? g.columns.map((c) => `\`${c}\``).join(', ') : '*whole table*';
+      out.push(`| ${when} | ${cols} | ${g.why.replace(/\|/g, '\\|')} |`);
     }
     out.push('');
   }
   return out.join('\n');
+}
+
+export interface AdviceGroup {
+  table: string;
+  when: IndexAdvice['when'];
+  kind: IndexKind;
+  /** Every column the group covers, e.g. all foreign keys of a fact table. */
+  columns: string[];
+  why: string;
+  statements: string[];
+}
+
+/** Merges consecutive advice for the same table with the same reason, e.g. one index per foreign key. */
+export function groupAdvice(advice: IndexAdvice[]): AdviceGroup[] {
+  const out: AdviceGroup[] = [];
+  for (const a of advice) {
+    const last = out[out.length - 1];
+    if (last && last.table === a.table && last.when === a.when && last.why === a.why) {
+      for (const c of a.columns) if (!last.columns.includes(c)) last.columns.push(c);
+      last.statements.push(a.sql);
+    } else {
+      out.push({ table: a.table, when: a.when, kind: a.kind, columns: [...a.columns], why: a.why, statements: [a.sql] });
+    }
+  }
+  return out;
 }

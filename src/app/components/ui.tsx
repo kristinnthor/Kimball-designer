@@ -7,15 +7,24 @@ export function Field({
   help,
   children,
   htmlFor,
+  hideLabel,
 }: {
   label: string;
   help?: ReactNode;
   children: ReactNode;
   htmlFor?: string;
+  hideLabel?: boolean;
 }) {
+  const cls = hideLabel ? 'sr-only' : undefined;
   return (
     <div className="field">
-      {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span className="field-label">{label}</span>}
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className={cls}>
+          {label}
+        </label>
+      ) : (
+        <span className={hideLabel ? 'sr-only' : 'field-label'}>{label}</span>
+      )}
       {children}
       {help && <span className="help">{help}</span>}
     </div>
@@ -305,12 +314,15 @@ export function TagInput({
   values,
   onChange,
   placeholder = 'Type and press Enter',
+  hideLabel,
 }: {
   label: string;
   help?: ReactNode;
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
+  /** Keep the label for screen readers only (e.g. inside a table with a column header). */
+  hideLabel?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const id = useId();
@@ -324,7 +336,7 @@ export function TagInput({
     setDraft('');
   };
   return (
-    <Field label={label} help={help} htmlFor={id}>
+    <Field label={label} help={help} htmlFor={id} hideLabel={hideLabel}>
       <div className="tag-input">
         {values.map((v) => (
           <span className="tag" key={v}>

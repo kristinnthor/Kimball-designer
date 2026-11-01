@@ -179,7 +179,8 @@ function entityName(subject: string, i: number, rng: Rng): string {
   if (PEOPLE.test(subject) && !COMPANIES.test(subject)) return `${FIRST[(i * 7 + int(rng, 0, 19)) % 20]} ${LAST[(i * 3 + Math.floor(i / 20)) % 20]}`;
   if (COMPANIES.test(subject)) return `${COMPANY_A[i % 8]} ${COMPANY_B[Math.floor(i / 8) % 8]}${i >= 64 ? ` ${Math.floor(i / 64) + 1}` : ''}`;
   if (SITES.test(subject)) return `${CITIES[i % CITIES.length]} ${SITE_SUFFIX[Math.floor(i / CITIES.length) % SITE_SUFFIX.length]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ''}`;
-  if (PRODUCTS.test(subject)) return `${PRODUCT_ADJ[i % 8]} ${PRODUCT_NOUN[Math.floor(i / 8) % 12]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ''}`;
+  // Nouns change fastest so neighbouring rows differ; (5q + n) mod 8 keeps all 96 pairs distinct.
+  if (PRODUCTS.test(subject)) return `${PRODUCT_ADJ[(5 * Math.floor(i / 12) + i) % 8]} ${PRODUCT_NOUN[i % 12]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ''}`;
   if (PROMOS.test(subject)) return `${SEASONS[i % 8]} ${OFFERS[Math.floor(i / 8) % 5]}${i >= 40 ? ` ${Math.floor(i / 40) + 1}` : ''}`;
   return `${subject.replace(/\b\w/g, (c) => c.toUpperCase())} ${i + 1}`;
 }
@@ -272,6 +273,43 @@ function hierarchyLevels(table: PhysicalTable, project: KimballProject): Physica
   return out;
 }
 
+interface HierarchyPlan {
+  cols: PhysicalColumn[];
+  /** Members at the bottom level. */
+  leaves: number;
+  /** Children per parent at each level (bottom first). */
+  fanout: number[];
+}
+
+/**
+ * Sizes each level to its value pool: with 8 brands and 4 categories every
+ * category gets two brands, so no level needs made-up suffixes.
+ */
+function planHierarchy(cols: PhysicalColumn[]): HierarchyPlan {
+  const poolSize = (c: PhysicalColumn) => poolFor(c.source.kind === 'attribute' ? c.source.attribute.name : c.name)?.length;
+  const top = cols.length - 1;
+  let size = Math.min(4, poolSize(cols[top]!) ?? 4);
+  const fanout = new Array<number>(cols.length).fill(1);
+  for (let li = top - 1; li >= 0; li--) {
+    fanout[li] = Math.max(1, Math.floor((poolSize(cols[li]!) ?? size * 3) / size));
+    size *= fanout[li]!;
+  }
+  return { cols, leaves: size, fanout };
+}
+
+/** Position of a random member at every level of each hierarchy. */
+function hierarchyPositions(plans: HierarchyPlan[], rng: Rng): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const plan of plans) {
+    let index = int(rng, 0, plan.leaves - 1);
+    plan.cols.forEach((c, li) => {
+      out.set(c.name, index);
+      index = Math.floor(index / plan.fanout[li]!);
+    });
+  }
+  return out;
+}
+
 // ─── Tables ───
 
 interface Version {
@@ -332,14 +370,11 @@ function memberTable(table: PhysicalTable, project: KimballProject, settings: Ph
   const first = dates[0]!;
   const last = dates[dates.length - 1]!;
 
+  const plans = hierarchies.map(planHierarchy);
+  // Hierarchy columns change together when any of their levels keeps type 2 history.
+  const movesWithHistory = new Set(hierarchies.filter((cols) => cols.some((c) => historyCols.has(c.name))).flat().map((c) => c.name));
   for (let i = 0; i < n; i++) {
-    // Hierarchy positions: 4 members at the top level, three children per parent below.
-    const levelOf = new Map<string, number>();
-    for (const cols of hierarchies) {
-      const sizes = cols.map((_, li) => 4 * 3 ** (cols.length - 1 - li));
-      const leaf = int(rng, 0, sizes[0]! - 1);
-      cols.forEach((c, li) => levelOf.set(c.name, Math.floor(leaf / 3 ** li)));
-    }
+    const levelOf = hierarchyPositions(plans, rng);
     const base: Cell[] = table.columns.map((c) => {
       if (c.role === 'business-key') {
         if (c.source.kind === 'attribute' && c.source.attribute.sampleValues?.length && n <= c.source.attribute.sampleValues.length) {
@@ -365,7 +400,10 @@ function memberTable(table: PhysicalTable, project: KimballProject, settings: Ph
       : [[first, FAR_FUTURE, true]];
     spans.forEach(([from, to, current], vi) => {
       key += 1;
+      // A changed member moves within its hierarchies as a whole (new brand → that brand's category).
+      const moved = vi > 0 ? hierarchyPositions(plans, rng) : null;
       const row = table.columns.map((c, ci): Cell => {
+        if (moved && movesWithHistory.has(c.name)) return attributeValue(c, table, i, rng, moved.get(c.name));
         if (c.role === 'surrogate-key') return key;
         if (c.source.kind === 'generated' && c.source.purpose === 'effective-from') return from;
         if (c.source.kind === 'generated' && c.source.purpose === 'effective-to') return to;

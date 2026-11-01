@@ -7,6 +7,7 @@ import { GrainPhase } from './GrainPhase';
 import { KickoffPhase } from './KickoffPhase';
 import { MatrixPhase } from './MatrixPhase';
 import { ProcessesPhase } from './ProcessesPhase';
+import { PrototypePhase } from './PrototypePhase';
 import { RequirementsPhase } from './RequirementsPhase';
 import { ReviewPhase } from './ReviewPhase';
 import { StakeholdersPhase } from './StakeholdersPhase';
@@ -22,4 +23,5 @@ export const PHASE_COMPONENTS: Record<PhaseId, ComponentType> = {
   bubbles: BubblesPhase,
   matrix: MatrixPhase,
   review: ReviewPhase,
+  prototype: PrototypePhase,
 };

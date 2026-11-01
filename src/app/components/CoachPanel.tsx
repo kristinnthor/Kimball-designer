@@ -93,7 +93,7 @@ export function CoachPanel({ phase, onClose }: { phase: PhaseId; onClose: () => 
         )}
 
         <section>
-          <a href={helpHref('phases')}>All ten phases, demos and deliverables in Help →</a>
+          <a href={helpHref('phases')}>All phases, demos and deliverables in Help →</a>
         </section>
       </div>
     </aside>
