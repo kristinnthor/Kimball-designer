@@ -118,6 +118,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | PR: `kimball` CLI (init, summary, validate, render) and `kimball serve` live-sync server (#13, #14) | CLI PR |
 | 2026-11-01 | PR: core engine — model, JSON Schema, validation (16 rules), bus matrix, bubble diagrams, requirements doc, 3 example projects (#8–#12; part of #26) | core PR |
 | 2026-11-01 | Merged: toolchain scaffold + CI (#6, #7) | [#37](https://github.com/kristinnthor/Kimball-designer/pull/37) |
 | 2026-11-01 | Bootstrap: branding, runbook, architecture, ADRs, methodology, roadmap, templates | initial commit |

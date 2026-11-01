@@ -56,4 +56,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Run bundled CLI without installing dependencies
-        run: node plugin/skills/kimball-designer/scripts/kimball.mjs --version
+        run: |
+          K=plugin/skills/kimball-designer/scripts/kimball.mjs
+          node $K --version
+          node $K init tmp/retail.kimball.json --example retail
+          node $K validate tmp/retail.kimball.json --strict
+          node $K summary tmp/retail.kimball.json
+          node $K render tmp/retail.kimball.json --out tmp/out
+          test -f tmp/out/requirements.md && test -f tmp/out/bubbles/retail-sales.svg
