@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Build hosted UI
+        run: npm run build:web
+      - name: Build skill bundles
+        run: npm run build:skill
+      - name: Skill bundle is up to date
+        run: |
+          if ! git diff --exit-code --stat -- plugin/; then
+            echo "::error::Committed skill bundles are stale. Run 'npm run build:skill' and commit the result."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- plugin/)" ]; then
+            git status --porcelain -- plugin/
+            echo "::error::Untracked skill build outputs. Run 'npm run build:skill' and commit the result."
+            exit 1
+          fi
+
+  cli-compat:
+    name: CLI runs on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run bundled CLI without installing dependencies
+        run: node plugin/skills/kimball-designer/scripts/kimball.mjs --version
