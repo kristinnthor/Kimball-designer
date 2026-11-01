@@ -13,6 +13,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 | What's done / left? | 📋 [Delivery tracker (#1)](https://github.com/kristinnthor/Kimball-designer/issues/1) — boxes tick automatically when issues close |
 | What's happening right now? | [Issues labelled `status: in progress`](https://github.com/kristinnthor/Kimball-designer/issues?q=is%3Aopen+label%3A%22status%3A+in+progress%22) and [open PRs](https://github.com/kristinnthor/Kimball-designer/pulls) |
 | Is the build green? | [Actions → CI](https://github.com/kristinnthor/Kimball-designer/actions/workflows/ci.yml) |
+| Is the hosted UI up to date? | [kimball.kristinn.eu](https://kimball.kristinn.eu) · [Actions → Pages](https://github.com/kristinnthor/Kimball-designer/actions/workflows/pages.yml) (deploys on every push to `main`) |
 | What needs **me**? | [Issues labelled `needs: owner decision`](https://github.com/kristinnthor/Kimball-designer/issues?q=is%3Aopen+label%3A%22needs%3A+owner+decision%22) and [§ 5 below](#5-decisions-awaiting-the-owner) |
 | What's blocked? | [Issues labelled `status: blocked`](https://github.com/kristinnthor/Kimball-designer/issues?q=is%3Aopen+label%3A%22status%3A+blocked%22) |
 | Milestone progress | [Milestones](https://github.com/kristinnthor/Kimball-designer/milestones) |
@@ -20,7 +21,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
-> **Current status (2026-11-01):** 33 of 35 backlog issues are done and merged. The remaining two, #35 (enable Pages) and #36 (tag v1.0.0 after a live install test), are **your decisions**; see § 5.
+> **Current status (2026-11-01):** 34 of 35 backlog issues are done. The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu) (#35). The last one, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
 
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
@@ -30,7 +31,7 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M1 · Core engine** | ✅ | #8 model · #9 validation · #10 bus matrix · #11 bubble · #12 req. doc · #13 CLI · #14 serve |
 | **M2 · Guided UI** | ✅ | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
 | **M3 · Claude skill** | ✅ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
-| **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages 🙋 · #36 release 🙋 |
+| **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages ✅ · #36 release 🙋 |
 
 ## 3. How work flows
 
@@ -102,8 +103,8 @@ npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
 |---|---|---|---|
 | D1 | **Licence** | MIT (most permissive, common for dev tools) | MIT |
 | D2 | **Brand approval** — name, logo, palette in [`brand/BRAND.md`](../brand/BRAND.md) | Approve as is | Keep as is |
-| D3 | **Publish hosted UI on GitHub Pages** (#35) — Settings → Pages → Source *GitHub Actions*, then add repo variable `DEPLOY_PAGES=true`. The workflow is ready. | Yes — e2e and axe tests now pass | Not published |
-| D4 | **Social preview image** — upload [`brand/social-preview.png`](../brand/social-preview.png) in Settings → General → Social preview (cannot be done via API) | Upload | GitHub default card |
+| D3 | ✅ **Hosted UI on GitHub Pages** (#35). Decided 2026-11-01: live at [kimball.kristinn.eu](https://kimball.kristinn.eu); Pages source is *GitHub Actions* and `DEPLOY_PAGES=true` | — | — |
+| D4 | ✅ **Social preview image**. Uploaded by the owner on 2026-11-01 | — | — |
 | D6 | **Cut v1.0.0** (#36) — first do a live install test (`/plugin marketplace add kristinnthor/Kimball-designer`, then ask Claude to start a project), then run `node scripts/bump-version.mjs 1.0.0`, `npm run build:skill`, commit, `git tag v1.0.0`, `git push --follow-tags`. The release workflow publishes the zip. | Release after your smoke test | Stays at 0.1.0 |
 | D5 | **Branch protection on `main`** (require CI + PR) — needs admin; would stop the agent from merging if reviews are required | Require CI only, not reviews, until v1.0 | Unprotected |
 
@@ -117,6 +118,9 @@ npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
 | UI shows "Offline mode" when served | Opened `ui/index.html` via `file://` instead of the served URL | Use the URL printed by `kimball serve` |
 | UI and file disagree | Edited in both places within ~2 s | The UI prompts to keep *disk* or *browser* version; choose, then continue |
 | Skill doesn't trigger in Claude | Plugin not installed/enabled | `/plugin` → check `kimball-designer`; or copy the skill folder to `~/.claude/skills/` |
+| kimball.kristinn.eu shows a blank page | Pages source switched back to *Deploy from a branch*, which serves the unbuilt source `index.html` | Settings → Pages → Source *GitHub Actions*, then re-run the *Pages* workflow |
+| Pages workflow is *skipped* | Repository variable `DEPLOY_PAGES` isn't `true` | Settings → Secrets and variables → Actions → Variables |
+| HTTPS certificate error on kimball.kristinn.eu | GitHub hasn't issued the certificate for the custom domain yet (up to 24 h after DNS is set) | Wait, then tick Settings → Pages → *Enforce HTTPS* |
 
 ## 7. Progress log
 
@@ -124,6 +128,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | Hosted UI live at kimball.kristinn.eu (#35): owner set the custom domain and uploaded the social preview; Pages source switched to GitHub Actions, `DEPLOY_PAGES=true`, Open Graph tags, no `kimball serve` probe off localhost | [#44](https://github.com/kristinnthor/Kimball-designer/pull/44) |
 | 2026-11-01 | Owner actions posted on #35 (Pages) and #36 (v1.0.0); tracker #1 updated | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |
 | 2026-11-01 | Merged: quality & release — Playwright e2e, axe a11y (both themes), Pages workflow (gated), release workflow, social preview PNG (#33, #34; #35/#36 ready for owner) | [#42](https://github.com/kristinnthor/Kimball-designer/pull/42) |
 | 2026-11-01 | Merged: Claude skill — SKILL.md, references, interview guide, plugin marketplace, evals (#28–#32) | [#41](https://github.com/kristinnthor/Kimball-designer/pull/41) |

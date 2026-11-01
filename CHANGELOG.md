@@ -24,7 +24,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Playwright end-to-end tests: full wizard flow offline, live sync both ways, conflict resolution (#33).
 - Accessibility: axe checks (WCAG 2.1 AA, serious/critical) on every phase in light and dark themes; keyboard-operable bus matrix; focusable scroll regions; contrast fixes (#34).
-- GitHub Pages workflow, gated on the `DEPLOY_PAGES` repository variable (#35).
+- Hosted UI at [kimball.kristinn.eu](https://kimball.kristinn.eu), deployed by the GitHub Pages workflow (gated on the `DEPLOY_PAGES` repository variable), with Open Graph tags for link previews (#35).
 - Release workflow (tag `v*` → GitHub release with the skill zip; manual dry run), `scripts/bump-version.mjs`, draft v1.0.0 release notes, and PNG renders of the brand assets (#36).
 
 ### Fixed

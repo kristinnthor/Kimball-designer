@@ -25,6 +25,7 @@ const LOCAL_KEY = 'kd.project.v1';
 const SAVE_DELAY_LOCAL = 400;
 const SAVE_DELAY_SERVER = 600;
 const POLL_MS = 2000;
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 let status: SyncStatus = { mode: 'local', state: 'idle', fileName: null, filePath: null, message: null };
 const listeners = new Set<() => void>();
@@ -173,7 +174,8 @@ export async function keepBrowserVersion() {
 export async function startSync(): Promise<SyncMode> {
   type Health = { app?: string; file?: string; fileName?: string };
   let health: Health | null = null;
-  if (window.location.protocol.startsWith('http')) {
+  // `kimball serve` only listens on loopback, so the hosted site and file:// skip the probe.
+  if (window.location.protocol.startsWith('http') && LOOPBACK_HOSTS.has(window.location.hostname)) {
     try {
       const res = await fetch(api('health'), { cache: 'no-store' });
       if (res.ok) health = (await res.json()) as Health;

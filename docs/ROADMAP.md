@@ -24,7 +24,7 @@ Shell & stepper (#15), store & live sync (#16), Discover phases (#17), business 
 SKILL.md workflow (#28), references (#29), interview question bank (#30), plugin packaging (#31), evaluation scenarios (#32).
 
 ## M4 · Quality & release
-Playwright e2e (#33), accessibility (#34), GitHub Pages — owner opt-in (#35), v1.0.0 release (#36).
+Playwright e2e (#33), accessibility (#34), hosted UI on GitHub Pages at kimball.kristinn.eu (#35), v1.0.0 release (#36).
 
 ## After v1.0 (ideas, not scheduled)
 - Detailed design phase: attribute-level dimension design, SCD strategy per attribute, source-to-target mapping.

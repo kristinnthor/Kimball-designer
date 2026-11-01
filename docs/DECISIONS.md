@@ -65,3 +65,4 @@ Short records of the decisions that shape Kimball Designer. New decisions are ap
 ### ADR-010: GitHub Pages deployment is opt-in
 
 **Decision.** The Pages workflow exists but only deploys when the repository variable `DEPLOY_PAGES` is `true`. Publishing a public website is the owner's decision.
+**Status.** Enabled by the owner on 2026-11-01 at the custom domain `kimball.kristinn.eu`. Pages is set to build from GitHub Actions, so the `CNAME` file in the repository root is informational only. The domain is configured in Settings → Pages.
