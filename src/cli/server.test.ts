@@ -42,6 +42,26 @@ const put = (project: unknown, extra: Record<string, string> = {}) =>
     body: JSON.stringify(project),
   });
 
+describe('kimball serve, review fixes', () => {
+  it('answers an oversized PUT with 413 instead of resetting the connection', async () => {
+    const big = JSON.stringify({ ...createProject('Big'), padding: 'x'.repeat(6 * 1024 * 1024) });
+    const res = await raw('/api/project', { Host: `127.0.0.1:${server.port}`, 'Content-Type': 'application/json' }, 'PUT', big);
+    expect(res.status).toBe(413);
+  });
+
+  it('accepts a Content-Type in any case', async () => {
+    const res = await put(createProject('Case'), { 'Content-Type': 'Application/JSON' });
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 422 for a file that is JSON but not a project', async () => {
+    writeFileSync(file, JSON.stringify({ schemaVersion: '2.0' }));
+    const res = await fetch(`${base()}/api/project`);
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toContain('schemaVersion');
+  });
+});
+
 describe('kimball serve', () => {
   it('serves the UI and health info', async () => {
     const html = await fetch(server.url);

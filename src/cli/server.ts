@@ -38,7 +38,9 @@ export function startServer(options: ServeOptions): Promise<RunningServer> {
   const log = options.log ?? (() => {});
   let port = options.port ?? DEFAULT_PORT;
 
-  const allowedHosts = () => new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+  // Browsers omit the default port from Host and Origin, so port 80 also allows the bare names.
+  const allowedHosts = () =>
+    new Set(['127.0.0.1', 'localhost', '[::1]'].flatMap((h) => (port === 80 ? [`${h}:${port}`, h] : [`${h}:${port}`])));
   const allowedOrigins = () => new Set([...allowedHosts()].map((h) => `http://${h}`));
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json; charset=utf-8', extra: Record<string, string> = {}) => {
@@ -54,20 +56,28 @@ export function startServer(options: ServeOptions): Promise<RunningServer> {
   const json = (res: ServerResponse, status: number, data: unknown, extra?: Record<string, string>) =>
     send(res, status, JSON.stringify(data), undefined, extra);
 
+  /** Reads the body; resolves null when it is over the limit (the rest is drained so the 413 reaches the client). */
   const readBody = (req: IncomingMessage) =>
-    new Promise<string>((ok, fail) => {
+    new Promise<string | null>((ok, fail) => {
       const chunks: Buffer[] = [];
       let size = 0;
       req.on('data', (c: Buffer) => {
         size += c.length;
-        if (size > MAX_BODY) {
-          fail(new Error('too-large'));
-          req.destroy();
-        } else chunks.push(c);
+        if (size <= MAX_BODY) chunks.push(c);
       });
-      req.on('end', () => ok(Buffer.concat(chunks).toString('utf8')));
+      req.on('end', () => ok(size > MAX_BODY ? null : Buffer.concat(chunks).toString('utf8')));
       req.on('error', fail);
     });
+
+  /** Reads the file and its mtime consistently: retries if the file changed during the read. */
+  const readConsistent = async () => {
+    for (let attempt = 0; ; attempt++) {
+      const before = await mtimeMs(file);
+      const text = await readFile(file, 'utf8');
+      const after = await mtimeMs(file);
+      if (before === after || attempt >= 4) return { text, mtime: after };
+    }
+  };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     if (!allowedHosts().has(req.headers.host ?? '')) return json(res, 403, { error: 'Forbidden host' });
@@ -92,26 +102,24 @@ export function startServer(options: ServeOptions): Promise<RunningServer> {
 
       case 'GET /api/project': {
         if (!existsSync(file)) return json(res, 404, { error: 'Project file does not exist yet', file });
-        const [text, m] = await Promise.all([readFile(file, 'utf8'), mtimeMs(file)]);
+        const { text, mtime: m } = await readConsistent();
         try {
-          JSON.parse(text.replace(/^﻿/, ''));
+          // Not just JSON: the UI can only load something that normalises to a project.
+          normalizeProject(JSON.parse(text.replace(/^﻿/, '')));
         } catch (e) {
           // Typically a half-written edit; the UI keeps its copy and retries.
-          return json(res, 422, { error: `Project file is not valid JSON: ${(e as Error).message}`, mtimeMs: m });
+          const reason = e instanceof ProjectParseError ? e.message : `Project file is not valid JSON: ${(e as Error).message}`;
+          return json(res, 422, { error: reason, mtimeMs: m });
         }
         return send(res, 200, text, undefined, { 'X-Kimball-Mtime': String(m) });
       }
 
       case 'PUT /api/project': {
-        if (!(req.headers['content-type'] ?? '').startsWith('application/json')) {
+        if (!(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
           return json(res, 415, { error: 'Content-Type must be application/json' });
         }
-        let body: string;
-        try {
-          body = await readBody(req);
-        } catch {
-          return json(res, 413, { error: 'Project is larger than 5 MB' });
-        }
+        const body = await readBody(req);
+        if (body === null) return json(res, 413, { error: 'Project is larger than 5 MB' });
         const base = Number(req.headers[BASE_MTIME_HEADER]);
         const current = await mtimeMs(file);
         if (current !== null && Number.isFinite(base) && base > 0 && Math.abs(current - base) > 1) {

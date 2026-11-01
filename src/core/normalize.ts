@@ -39,7 +39,9 @@ export class ProjectParseError extends Error {
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
-const str = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
+/** Control characters other than tab and newlines are never meaningful and break SVG/XML exports. */
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+const str = (v: unknown): string => (typeof v === 'string' ? v.replace(CONTROL, '') : typeof v === 'number' ? String(v) : '');
 const strList = (v: unknown): string[] =>
   Array.isArray(v) ? v.map(str).filter((s) => s.trim() !== '') : typeof v === 'string' && v.trim() ? [v] : [];
 const list = (v: unknown): Obj[] => (Array.isArray(v) ? v.filter(isObj) : []);

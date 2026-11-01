@@ -102,7 +102,8 @@ export function busMatrixToCsv(project: KimballProject, options?: BusMatrixOptio
     ['Business process', 'Grain', ...m.columns.map((c) => displayName(c.dimension))],
     ...m.rows.map((r) => [displayName(r.process), r.process.grain, ...r.cells.map(cellText)]),
   ];
-  return rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  // The BOM makes Excel read the file as UTF-8, so names like "Þjónusta" survive.
+  return '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
 /** Standalone, branded HTML page containing the bus matrix. */

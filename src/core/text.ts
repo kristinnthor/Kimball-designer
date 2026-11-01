@@ -1,7 +1,11 @@
 /** Small, dependency-free text helpers shared by the exporters. */
 
+/** C0 control characters XML 1.0 forbids (tab, newline and carriage return are allowed). */
+const XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+
 export function escapeXml(s: string): string {
   return s
+    .replace(XML_INVALID, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -20,6 +24,32 @@ export function mdCell(s: string): string {
     .trim();
 }
 
+/**
+ * Escapes user text for running Markdown outside tables (headings, list items,
+ * paragraphs): HTML is neutralised, emphasis and link characters are escaped and
+ * newlines become spaces, so text can never start a new heading or list item.
+ */
+export function mdInline(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/([`*_[\]|])/g, '\\$1')
+    .replace(/\s*\r?\n\s*/g, ' ')
+    .trim()
+    .replace(/^([#+-])/, '\\$1')
+    .replace(/^(\d+)([.)])/, '$1\\$2');
+}
+
+/** A Markdown code span that survives backticks and newlines in the text. */
+export function mdCode(s: string): string {
+  const text = s.replace(/\s*\r?\n\s*/g, ' ').trim();
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(longest + 1);
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
 /** CSV cell with quoting. Values a spreadsheet would run as a formula get a leading apostrophe. */
 export function csvCell(s: string): string {
   const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
@@ -32,8 +62,8 @@ export function slugify(s: string, fallback = 'item'): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, '');
   return slug || fallback;
 }
 
@@ -43,38 +73,40 @@ export function slugify(s: string, fallback = 'item'): string {
  */
 export function wrapText(text: string, maxWidth: number, maxLines: number): string[] {
   const maxChars = Math.max(2, Math.floor(maxWidth));
-  const words = text.trim().split(/\s+/).filter(Boolean);
+  // Work in code points so emoji and other astral characters are never cut in half.
+  const words = text.trim().split(/\s+/).filter(Boolean).map((w) => Array.from(w));
   const lines: string[] = [];
-  let current = '';
-  const push = (line: string) => lines.push(line);
+  let current: string[] = [];
+  const push = (line: string[]) => lines.push(line.join(''));
   for (let word of words) {
     while (word.length > maxChars) {
-      if (current) {
+      if (current.length) {
         push(current);
-        current = '';
+        current = [];
       }
-      push(word.slice(0, maxChars - 1) + '-');
+      push([...word.slice(0, maxChars - 1), '-']);
       word = word.slice(maxChars - 1);
     }
-    if (!current) current = word;
-    else if ((current + ' ' + word).length <= maxChars) current += ' ' + word;
+    if (!current.length) current = word;
+    else if (current.length + 1 + word.length <= maxChars) current = [...current, ' ', ...word];
     else {
       push(current);
       current = word;
     }
   }
-  if (current) push(current);
+  if (current.length) push(current);
   if (lines.length > maxLines) {
     const kept = lines.slice(0, maxLines);
-    const last = kept[maxLines - 1]!;
-    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1) : last) + '…';
+    const last = Array.from(kept[maxLines - 1]!);
+    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1).join('') : last.join('')) + '…';
     return kept;
   }
   return lines;
 }
 
 export function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+  const chars = Array.from(s);
+  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : s;
 }
 
 /** Joins with commas and a final "and". */
