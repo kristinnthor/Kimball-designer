@@ -11,11 +11,19 @@ export function escapeXml(s: string): string {
 
 /** Escapes text for use inside a Markdown table cell. */
 export function mdCell(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>').trim();
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, '<br>')
+    .trim();
 }
 
+/** CSV cell with quoting. Values a spreadsheet would run as a formula get a leading apostrophe. */
 export function csvCell(s: string): string {
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export function slugify(s: string, fallback = 'item'): string {
@@ -33,7 +41,8 @@ export function slugify(s: string, fallback = 'item'): string {
  * Greedy word wrap into at most `maxLines` lines of about `maxChars` characters.
  * Over-long words are hard-split; overflow on the last line is ellipsised.
  */
-export function wrapText(text: string, maxChars: number, maxLines: number): string[] {
+export function wrapText(text: string, maxWidth: number, maxLines: number): string[] {
+  const maxChars = Math.max(2, Math.floor(maxWidth));
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = '';

@@ -1,4 +1,5 @@
 import { PHASE_IDS, type KimballProject, type PhaseId } from './model';
+import { countBySeverity, validateProject } from './validate';
 
 export type StageId = 'discover' | 'model' | 'deliver';
 
@@ -121,8 +122,13 @@ function status(
  * How far along each phase is. Used by the UI stepper, the CLI `summary`
  * command and the skill to decide what to ask next. Pure and cheap.
  */
-export function phaseStatus(project: KimballProject, id: PhaseId, errorCount = 0, warningCount = 0): PhaseStatus {
+export function phaseStatus(project: KimballProject, id: PhaseId, errorCount?: number, warningCount?: number): PhaseStatus {
   const { meta, stakeholders, requirements, processes, dimensions } = project;
+  if (id === 'review' && (errorCount === undefined || warningCount === undefined)) {
+    const counts = countBySeverity(validateProject(project));
+    errorCount = counts.error;
+    warningCount = counts.warning;
+  }
   const n = processes.length;
   const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -178,6 +184,8 @@ export function phaseStatus(project: KimballProject, id: PhaseId, errorCount = 0
       );
     }
     case 'review': {
+      errorCount ??= 0;
+      warningCount ??= 0;
       const issues = errorCount + warningCount;
       return {
         id,

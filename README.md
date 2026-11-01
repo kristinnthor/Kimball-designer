@@ -45,6 +45,14 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 - **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
 - **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
 
+## Screenshots
+
+| Bubble diagrams | Enterprise bus matrix |
+|---|---|
+| ![Bubble diagram for the Subscription changes process, with conformed dimensions in amber](docs/images/ui-bubble-diagrams.jpg) | ![Interactive bus matrix with conformed dimension columns](docs/images/ui-bus-matrix.jpg) |
+
+![Dimensions phase in dark mode with the coach panel open](docs/images/ui-dimensions-coach-dark.jpg)
+
 ## Quick start
 
 > 🚧 **In development.** Follow progress in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1). The commands below describe the v1.0 target.

@@ -2,6 +2,7 @@ import {
   ADDITIVITY,
   FACT_TABLE_TYPES,
   displayName,
+  isConformedUsage,
   optionLabel,
   type BusinessProcess,
   type DimensionKind,
@@ -83,10 +84,10 @@ export function layoutBubble(project: KimballProject, process: BusinessProcess, 
     return {
       dimensionId,
       label,
-      lines: wrapText(label, 11, 3),
+      lines: wrapText(label, 12, 3),
       roles: [...new Set(roles)],
       kind: dim?.kind ?? 'standard',
-      conformed: usageCount(dimensionId) >= 2,
+      conformed: isConformedUsage(dim?.kind, usageCount(dimensionId)),
       x: round(cx + dist * Math.cos(angle)),
       y: round(cy + dist * Math.sin(angle)),
       r,
@@ -262,7 +263,8 @@ export function bubbleToMermaid(project: KimballProject, process: BusinessProces
   const merged = new Map<Id, string[]>();
   for (const u of process.dimensions) merged.set(u.dimensionId, [...(merged.get(u.dimensionId) ?? []), ...u.roles]);
   let i = 0;
-  for (const [id, roles] of merged) {
+  for (const [id, allRoles] of merged) {
+    const roles = [...new Set(allRoles)];
     const dim = project.dimensions.find((d) => d.id === id);
     const label = mermaidText(dim ? displayName(dim) : id) + (roles.length ? ` · ${mermaidText(roles.join(', '))}` : '');
     lines.push(`    d${i++}(${label})`);

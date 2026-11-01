@@ -5,6 +5,10 @@ import { parseArgs } from 'node:util';
 import {
   APP_VERSION,
   EXAMPLES,
+  GUIDANCE,
+  INTERVIEW_QUESTIONS,
+  PHASES,
+  STAKEHOLDER_TYPES,
   ProjectParseError,
   bubbleToMermaid,
   bubbleToSvg,
@@ -58,6 +62,7 @@ Commands
   serve [file]       Open the guided UI on the project file with live sync
       --port <n>         Port (default ${DEFAULT_PORT})
       --open             Open the browser
+  guide [phase]      Coaching notes for a phase: why, what to ask, tips, pitfalls
   examples           List example projects
   help, --help       Show this help
   version, --version Show the version
@@ -193,6 +198,24 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
         if (opts.open) io.openUrl(server.url);
         await io.waitForExit();
         await server.close();
+        return 0;
+      }
+
+      case 'guide': {
+        const phase = PHASES.find((p) => p.id === fileArg);
+        if (!fileArg) {
+          io.out('Phases (run "kimball guide <phase>" for coaching notes):\n\n');
+          for (const p of PHASES) io.out(`  ${String(p.number).padStart(2)}  ${p.id.padEnd(13)} ${p.goal}\n`);
+          return 0;
+        }
+        if (!phase) throw new CliError(`Unknown phase "${fileArg}". Phases: ${PHASES.map((p) => p.id).join(', ')}.`);
+        const g = GUIDANCE[phase.id];
+        const list = (title: string, items: string[]) => (items.length ? `\n## ${title}\n${items.map((i) => `- ${i}`).join('\n')}\n` : '');
+        io.out(`# Phase ${phase.number}: ${phase.title}\n\nGoal: ${phase.goal}\n\n${g.why}\n`);
+        io.out(list('Ask', g.ask) + list('Tips', g.tips) + list('Avoid', g.pitfalls) + list('Examples', g.examples));
+        if (phase.id === 'stakeholders') {
+          for (const t of STAKEHOLDER_TYPES) io.out(list(`Interview questions — ${t.label}`, INTERVIEW_QUESTIONS[t.value]));
+        }
         return 0;
       }
 

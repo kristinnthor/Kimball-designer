@@ -35,7 +35,7 @@ describe('normalizeProject', () => {
     expect(proc.id).toMatch(/^bp_/);
     expect(proc.factTableType).toBeNull();
     expect(proc.businessValue).toBe(5);
-    expect(proc.feasibility).toBe(1);
+    expect(proc.feasibility).toBeNull(); // 0 means "not scored"
     expect(proc.dimensions).toEqual([
       { dimensionId: 'dm_date', roles: [] },
       { dimensionId: 'dm_product', roles: ['Buyer'] },

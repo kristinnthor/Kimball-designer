@@ -42,14 +42,15 @@ const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T)
   allowed.includes(v as T) ? (v as T) : fallback;
 const nullableOneOf = <T extends string>(v: unknown, allowed: readonly T[]): T | null =>
   allowed.includes(v as T) ? (v as T) : null;
+/** 1–5, or null when missing or below 1 (blank and 0 mean "not scored"). */
 const score = (v: unknown): number | null => {
-  const n = typeof v === 'string' ? Number(v) : v;
-  return typeof n === 'number' && Number.isFinite(n) ? Math.min(5, Math.max(1, Math.round(n))) : null;
+  const n = typeof v === 'string' ? (v.trim() ? Number(v) : NaN) : v;
+  return typeof n === 'number' && Number.isFinite(n) && n >= 1 ? Math.min(5, Math.round(n)) : null;
 };
-const id = (v: unknown, prefix: string): string => {
-  const s = str(v).trim();
-  return /^[A-Za-z0-9_.-]+$/.test(s) ? s : newId(prefix);
-};
+/** Makes an id schema-safe deterministically, so references to it stay consistent. */
+const safeId = (v: unknown): string => str(v).trim().replace(/[^A-Za-z0-9_.-]+/g, '_');
+const id = (v: unknown, prefix: string): string => safeId(v) || newId(prefix);
+const idList = (v: unknown): string[] => strList(v).map(safeId).filter(Boolean);
 
 const STAKEHOLDER_TYPES = ['executive', 'business', 'analyst', 'it', 'other'] as const satisfies readonly StakeholderType[];
 const INTERVIEW = ['planned', 'done', 'skipped'] as const satisfies readonly InterviewStatus[];
@@ -81,8 +82,8 @@ function normalizeRequirement(o: Obj): Requirement {
     statement: str(o.statement),
     kpis: strList(o.kpis),
     priority: oneOf(o.priority, PRIORITY, 'should'),
-    stakeholderIds: strList(o.stakeholderIds),
-    processIds: strList(o.processIds),
+    stakeholderIds: idList(o.stakeholderIds),
+    processIds: idList(o.processIds),
     notes: str(o.notes),
   };
 }
@@ -99,9 +100,9 @@ function normalizeMeasure(o: Obj): Measure {
 
 function normalizeUsage(v: unknown): DimensionUsage | null {
   // Accept a bare dimension id as shorthand.
-  if (typeof v === 'string' && v.trim()) return { dimensionId: v.trim(), roles: [] };
+  if (typeof v === 'string' && safeId(v)) return { dimensionId: safeId(v), roles: [] };
   if (!isObj(v)) return null;
-  const dimensionId = str(v.dimensionId).trim();
+  const dimensionId = safeId(v.dimensionId);
   return dimensionId ? { dimensionId, roles: strList(v.roles) } : null;
 }
 
