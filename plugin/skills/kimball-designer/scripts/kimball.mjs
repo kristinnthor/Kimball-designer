@@ -142,6 +142,9 @@ function createProject(name = "", now = (/* @__PURE__ */ new Date()).toISOString
 function processesUsing(project, dimensionId) {
   return project.processes.filter((p) => p.dimensions.some((u) => u.dimensionId === dimensionId));
 }
+function isConformedUsage(kind, usageCount) {
+  return usageCount >= 2 && kind !== "degenerate";
+}
 function isDateDimension(dimension) {
   return dimension.kind === "date" || /\b(date|time|calendar|day|period|month)\b/i.test(dimension.name);
 }
@@ -166,13 +169,12 @@ var list = (v) => Array.isArray(v) ? v.filter(isObj) : [];
 var oneOf = (v, allowed, fallback) => allowed.includes(v) ? v : fallback;
 var nullableOneOf = (v, allowed) => allowed.includes(v) ? v : null;
 var score = (v) => {
-  const n = typeof v === "string" ? Number(v) : v;
-  return typeof n === "number" && Number.isFinite(n) ? Math.min(5, Math.max(1, Math.round(n))) : null;
+  const n = typeof v === "string" ? v.trim() ? Number(v) : NaN : v;
+  return typeof n === "number" && Number.isFinite(n) && n >= 1 ? Math.min(5, Math.round(n)) : null;
 };
-var id = (v, prefix) => {
-  const s = str(v).trim();
-  return /^[A-Za-z0-9_.-]+$/.test(s) ? s : newId(prefix);
-};
+var safeId = (v) => str(v).trim().replace(/[^A-Za-z0-9_.-]+/g, "_");
+var id = (v, prefix) => safeId(v) || newId(prefix);
+var idList = (v) => strList(v).map(safeId).filter(Boolean);
 var STAKEHOLDER_TYPES2 = ["executive", "business", "analyst", "it", "other"];
 var INTERVIEW = ["planned", "done", "skipped"];
 var PRIORITY = ["must", "should", "could", "wont"];
@@ -201,8 +203,8 @@ function normalizeRequirement(o) {
     statement: str(o.statement),
     kpis: strList(o.kpis),
     priority: oneOf(o.priority, PRIORITY, "should"),
-    stakeholderIds: strList(o.stakeholderIds),
-    processIds: strList(o.processIds),
+    stakeholderIds: idList(o.stakeholderIds),
+    processIds: idList(o.processIds),
     notes: str(o.notes)
   };
 }
@@ -216,9 +218,9 @@ function normalizeMeasure(o) {
   };
 }
 function normalizeUsage(v) {
-  if (typeof v === "string" && v.trim()) return { dimensionId: v.trim(), roles: [] };
+  if (typeof v === "string" && safeId(v)) return { dimensionId: safeId(v), roles: [] };
   if (!isObj(v)) return null;
-  const dimensionId = str(v.dimensionId).trim();
+  const dimensionId = safeId(v.dimensionId);
   return dimensionId ? { dimensionId, roles: strList(v.roles) } : null;
 }
 function normalizeProcess(o) {
@@ -311,134 +313,6 @@ function serializeProject(project) {
   return JSON.stringify(project, null, 2) + "\n";
 }
 
-// src/core/phases.ts
-var PHASES = [
-  { id: "kickoff", number: 1, stage: "discover", title: "Kickoff", goal: "Agree on purpose, sponsor and scope." },
-  {
-    id: "stakeholders",
-    number: 2,
-    stage: "discover",
-    title: "Stakeholders",
-    goal: "List who to interview and track the interviews."
-  },
-  {
-    id: "requirements",
-    number: 3,
-    stage: "discover",
-    title: "Requirements",
-    goal: "Capture the business questions and KPIs people need answered."
-  },
-  {
-    id: "processes",
-    number: 4,
-    stage: "model",
-    title: "Business processes",
-    goal: "Identify the business events that produce the measurements."
-  },
-  { id: "grain", number: 5, stage: "model", title: "Grain", goal: "Declare exactly what one fact row represents." },
-  {
-    id: "dimensions",
-    number: 6,
-    stage: "model",
-    title: "Dimensions",
-    goal: "Describe the who, what, where, when, why and how — and share them."
-  },
-  { id: "facts", number: 7, stage: "model", title: "Facts", goal: "List the numeric measurements for each process." },
-  {
-    id: "bubbles",
-    number: 8,
-    stage: "deliver",
-    title: "Bubble diagrams",
-    goal: "Review the high-level model of each business process."
-  },
-  {
-    id: "matrix",
-    number: 9,
-    stage: "deliver",
-    title: "Bus matrix",
-    goal: "See every process against the conformed dimensions."
-  },
-  {
-    id: "review",
-    number: 10,
-    stage: "deliver",
-    title: "Review & export",
-    goal: "Resolve findings and export the deliverables."
-  }
-];
-var filled = (s) => s.trim().length > 0;
-function status(id2, done, total, detail, complete = total > 0 && done >= total, started = done > 0) {
-  const state = complete ? "complete" : started ? "in-progress" : "not-started";
-  return { id: id2, state, done, total, detail };
-}
-function phaseStatus(project, id2, errorCount = 0, warningCount = 0) {
-  const { meta, stakeholders, requirements, processes, dimensions } = project;
-  const n = processes.length;
-  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
-  switch (id2) {
-    case "kickoff": {
-      const checks = [filled(meta.name), filled(meta.purpose), filled(meta.scopeIn)];
-      const done = checks.filter(Boolean).length;
-      return status(id2, done, checks.length, `${done} of 3 essentials (name, purpose, scope)`);
-    }
-    case "stakeholders": {
-      const resolved = stakeholders.filter((s) => s.interviewStatus !== "planned").length;
-      const interviewed = stakeholders.filter((s) => s.interviewStatus === "done").length;
-      return status(
-        id2,
-        resolved,
-        stakeholders.length,
-        stakeholders.length === 0 ? "No stakeholders yet" : `${plural(stakeholders.length, "stakeholder")}, ${interviewed} interviewed`,
-        stakeholders.length > 0 && resolved === stakeholders.length && interviewed > 0,
-        stakeholders.length > 0
-      );
-    }
-    case "requirements": {
-      const count = requirements.length;
-      return status(id2, count, Math.max(count, 1), count === 0 ? "No requirements yet" : plural(count, "requirement"));
-    }
-    case "processes":
-      return status(id2, n, Math.max(n, 1), n === 0 ? "No business processes yet" : plural(n, "business process"));
-    case "grain": {
-      const done = processes.filter((p) => filled(p.grain) && p.factTableType).length;
-      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have a grain and type`);
-    }
-    case "dimensions": {
-      const done = processes.filter((p) => p.dimensions.length > 0).length;
-      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have dimensions`);
-    }
-    case "facts": {
-      const done = processes.filter((p) => p.facts.length > 0 || p.factTableType === "factless").length;
-      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have facts`);
-    }
-    case "bubbles": {
-      const done = processes.filter((p) => p.dimensions.length > 0).length;
-      return status(id2, done, n, n === 0 ? "Nothing to draw yet" : `${done} of ${n} diagrams ready`);
-    }
-    case "matrix": {
-      const used = dimensions.filter((d) => processes.some((p) => p.dimensions.some((u) => u.dimensionId === d.id))).length;
-      return status(
-        id2,
-        used,
-        dimensions.length,
-        dimensions.length === 0 ? "No dimensions yet" : `${used} of ${dimensions.length} dimensions on the matrix`,
-        n > 0 && dimensions.length > 0 && used === dimensions.length,
-        dimensions.length > 0
-      );
-    }
-    case "review": {
-      const issues = errorCount + warningCount;
-      return {
-        id: id2,
-        state: n === 0 ? "not-started" : issues === 0 ? "complete" : "in-progress",
-        done: issues === 0 ? 1 : 0,
-        total: 1,
-        detail: n === 0 ? "Nothing to review yet" : issues === 0 ? "No errors or warnings" : `${plural(errorCount, "error")}, ${plural(warningCount, "warning")}`
-      };
-    }
-  }
-}
-
 // src/core/validate.ts
 var GRAIN_PATTERN = /\b(one|a single|each)\s+(row|record|line)\s+(per|for each|for every|for)\b/i;
 function validateProject(project) {
@@ -457,6 +331,7 @@ function validateProject(project) {
   }
   const seen = /* @__PURE__ */ new Map();
   const allIds = [
+    meta.id,
     ...stakeholders.map((s) => s.id),
     ...requirements.map((r) => r.id),
     ...processes.map((p) => p.id),
@@ -689,6 +564,141 @@ function short(text, max = 48) {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+// src/core/phases.ts
+var PHASES = [
+  { id: "kickoff", number: 1, stage: "discover", title: "Kickoff", goal: "Agree on purpose, sponsor and scope." },
+  {
+    id: "stakeholders",
+    number: 2,
+    stage: "discover",
+    title: "Stakeholders",
+    goal: "List who to interview and track the interviews."
+  },
+  {
+    id: "requirements",
+    number: 3,
+    stage: "discover",
+    title: "Requirements",
+    goal: "Capture the business questions and KPIs people need answered."
+  },
+  {
+    id: "processes",
+    number: 4,
+    stage: "model",
+    title: "Business processes",
+    goal: "Identify the business events that produce the measurements."
+  },
+  { id: "grain", number: 5, stage: "model", title: "Grain", goal: "Declare exactly what one fact row represents." },
+  {
+    id: "dimensions",
+    number: 6,
+    stage: "model",
+    title: "Dimensions",
+    goal: "Describe the who, what, where, when, why and how — and share them."
+  },
+  { id: "facts", number: 7, stage: "model", title: "Facts", goal: "List the numeric measurements for each process." },
+  {
+    id: "bubbles",
+    number: 8,
+    stage: "deliver",
+    title: "Bubble diagrams",
+    goal: "Review the high-level model of each business process."
+  },
+  {
+    id: "matrix",
+    number: 9,
+    stage: "deliver",
+    title: "Bus matrix",
+    goal: "See every process against the conformed dimensions."
+  },
+  {
+    id: "review",
+    number: 10,
+    stage: "deliver",
+    title: "Review & export",
+    goal: "Resolve findings and export the deliverables."
+  }
+];
+var filled = (s) => s.trim().length > 0;
+function status(id2, done, total, detail, complete = total > 0 && done >= total, started = done > 0) {
+  const state = complete ? "complete" : started ? "in-progress" : "not-started";
+  return { id: id2, state, done, total, detail };
+}
+function phaseStatus(project, id2, errorCount, warningCount) {
+  const { meta, stakeholders, requirements, processes, dimensions } = project;
+  if (id2 === "review" && (errorCount === void 0 || warningCount === void 0)) {
+    const counts = countBySeverity(validateProject(project));
+    errorCount = counts.error;
+    warningCount = counts.warning;
+  }
+  const n = processes.length;
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  switch (id2) {
+    case "kickoff": {
+      const checks = [filled(meta.name), filled(meta.purpose), filled(meta.scopeIn)];
+      const done = checks.filter(Boolean).length;
+      return status(id2, done, checks.length, `${done} of 3 essentials (name, purpose, scope)`);
+    }
+    case "stakeholders": {
+      const resolved = stakeholders.filter((s) => s.interviewStatus !== "planned").length;
+      const interviewed = stakeholders.filter((s) => s.interviewStatus === "done").length;
+      return status(
+        id2,
+        resolved,
+        stakeholders.length,
+        stakeholders.length === 0 ? "No stakeholders yet" : `${plural(stakeholders.length, "stakeholder")}, ${interviewed} interviewed`,
+        stakeholders.length > 0 && resolved === stakeholders.length && interviewed > 0,
+        stakeholders.length > 0
+      );
+    }
+    case "requirements": {
+      const count = requirements.length;
+      return status(id2, count, Math.max(count, 1), count === 0 ? "No requirements yet" : plural(count, "requirement"));
+    }
+    case "processes":
+      return status(id2, n, Math.max(n, 1), n === 0 ? "No business processes yet" : plural(n, "business process"));
+    case "grain": {
+      const done = processes.filter((p) => filled(p.grain) && p.factTableType).length;
+      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have a grain and type`);
+    }
+    case "dimensions": {
+      const done = processes.filter((p) => p.dimensions.length > 0).length;
+      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have dimensions`);
+    }
+    case "facts": {
+      const done = processes.filter((p) => p.facts.length > 0 || p.factTableType === "factless").length;
+      return status(id2, done, n, n === 0 ? "Add business processes first" : `${done} of ${n} processes have facts`);
+    }
+    case "bubbles": {
+      const done = processes.filter((p) => p.dimensions.length > 0).length;
+      return status(id2, done, n, n === 0 ? "Nothing to draw yet" : `${done} of ${n} diagrams ready`);
+    }
+    case "matrix": {
+      const used = dimensions.filter((d) => processes.some((p) => p.dimensions.some((u) => u.dimensionId === d.id))).length;
+      return status(
+        id2,
+        used,
+        dimensions.length,
+        dimensions.length === 0 ? "No dimensions yet" : `${used} of ${dimensions.length} dimensions on the matrix`,
+        n > 0 && dimensions.length > 0 && used === dimensions.length,
+        dimensions.length > 0
+      );
+    }
+    case "review": {
+      errorCount ??= 0;
+      warningCount ??= 0;
+      const issues = errorCount + warningCount;
+      return {
+        id: id2,
+        state: n === 0 ? "not-started" : issues === 0 ? "complete" : "in-progress",
+        done: issues === 0 ? 1 : 0,
+        total: 1,
+        detail: n === 0 ? "Nothing to review yet" : issues === 0 ? "No errors or warnings" : `${plural(errorCount, "error")}, ${plural(warningCount, "warning")}`
+      };
+    }
+  }
+}
+
 // src/core/version.ts
 var APP_VERSION = true ? "0.1.0" : "0.0.0-dev";
 
@@ -757,16 +767,18 @@ function escapeXml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function mdCell(s) {
-  return s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();
+  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();
 }
 function csvCell(s) {
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 function slugify(s, fallback = "item") {
   const slug = s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
   return slug || fallback;
 }
-function wrapText(text, maxChars, maxLines) {
+function wrapText(text, maxWidth, maxLines) {
+  const maxChars = Math.max(2, Math.floor(maxWidth));
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines = [];
   let current = "";
@@ -809,7 +821,7 @@ function deriveBusMatrix(project, options = {}) {
   }
   let columns = project.dimensions.map((dimension) => {
     const usageCount = usage.get(dimension.id) ?? 0;
-    return { dimension, usageCount, conformed: usageCount >= 2 };
+    return { dimension, usageCount, conformed: isConformedUsage(dimension.kind, usageCount) };
   });
   if (!includeUnused) columns = columns.filter((c) => c.usageCount > 0);
   const catalogueIndex = new Map(project.dimensions.map((d, i) => [d.id, i]));
@@ -832,7 +844,7 @@ function deriveBusMatrix(project, options = {}) {
     process: process2,
     cells: columns.map(({ dimension }) => {
       const usages = process2.dimensions.filter((u) => u.dimensionId === dimension.id);
-      return { used: usages.length > 0, roles: usages.flatMap((u) => u.roles) };
+      return { used: usages.length > 0, roles: [...new Set(usages.flatMap((u) => u.roles))] };
     })
   }));
   return { columns, rows };
@@ -955,10 +967,10 @@ function layoutBubble(project, process2, options = {}) {
     return {
       dimensionId,
       label,
-      lines: wrapText(label, 11, 3),
+      lines: wrapText(label, 12, 3),
       roles: [...new Set(roles)],
       kind: dim?.kind ?? "standard",
-      conformed: usageCount(dimensionId) >= 2,
+      conformed: isConformedUsage(dim?.kind, usageCount(dimensionId)),
       x: round(cx + dist * Math.cos(angle)),
       y: round(cy + dist * Math.sin(angle)),
       r
@@ -1096,7 +1108,8 @@ function bubbleToMermaid(project, process2) {
   const merged = /* @__PURE__ */ new Map();
   for (const u of process2.dimensions) merged.set(u.dimensionId, [...merged.get(u.dimensionId) ?? [], ...u.roles]);
   let i = 0;
-  for (const [id2, roles] of merged) {
+  for (const [id2, allRoles] of merged) {
+    const roles = [...new Set(allRoles)];
     const dim = project.dimensions.find((d) => d.id === id2);
     const label = mermaidText(dim ? displayName(dim) : id2) + (roles.length ? ` · ${mermaidText(roles.join(", "))}` : "");
     lines.push(`    d${i++}(${label})`);
@@ -2057,12 +2070,239 @@ var EXAMPLES = [
 ];
 var DATA = { retail: retail_kimball_default, saas: saas_kimball_default, healthcare: healthcare_kimball_default };
 function isExampleId(id2) {
-  return id2 in DATA;
+  return Object.prototype.hasOwnProperty.call(DATA, id2);
 }
 function loadExample(id2, now) {
   const project = normalizeProject(JSON.parse(JSON.stringify(DATA[id2])), now);
   return now ? { ...project, meta: { ...project.meta, createdAt: now, updatedAt: now } } : project;
 }
+
+// src/core/guidance.ts
+var GUIDANCE = {
+  kickoff: {
+    why: "A dimensional model is only as useful as the business problem it serves. Agreeing on purpose, sponsor and scope up front keeps the interviews focused and stops the model from growing in every direction.",
+    ask: [
+      "What business decisions should this warehouse improve?",
+      "Who is the sponsor, and how will they judge success in six months?",
+      "Which business areas are in scope for the first release — and which are explicitly not?",
+      "Are there deadlines, regulatory drivers or known pain points?"
+    ],
+    tips: [
+      'Write the purpose as a business outcome ("reduce out-of-stocks"), not a technology ("build a lakehouse").',
+      "Keep success criteria measurable and few — two or three is plenty.",
+      "Recording what is out of scope is as valuable as what is in scope."
+    ],
+    pitfalls: [
+      "Starting from the source systems instead of the business questions.",
+      "A scope so broad that every department expects something in release one."
+    ],
+    examples: ['Purpose: "Give merchandising one trusted view of sales and margin by category, store and week."']
+  },
+  stakeholders: {
+    why: "Kimball requirements come from interviews with the people who make decisions and the people who know the data. A balanced list — executives, managers, analysts and source-system owners — prevents both wishful thinking and technical tunnel vision.",
+    ask: [
+      "Who makes decisions that this data should support?",
+      "Who builds reports and analyses today, and where does it hurt?",
+      "Who owns and understands each source system?",
+      "Whose sign-off will the model need?"
+    ],
+    tips: [
+      "Interview in small groups by role; one facilitator, one note-taker.",
+      "Send a short agenda in advance; ask about decisions and measures, not about tables.",
+      "Mark interviews done as you go — the notes are the raw material for requirements."
+    ],
+    pitfalls: [
+      "Only talking to IT, or only talking to executives.",
+      'Asking "what data do you want?" — you will get a list of every field in the source system.'
+    ],
+    examples: ["VP Merchandising (executive), Category manager (business), BI analyst (analyst), POS platform lead (IT)."]
+  },
+  requirements: {
+    why: "Requirements are the business questions people need answered and the measures they use to judge performance. They are what you will trace every business process and fact back to.",
+    ask: [
+      "What are the top questions you cannot answer today?",
+      "How do you measure success in your area? Which KPIs do you report?",
+      "How do you want to slice those numbers — by what, and at what level of detail?",
+      "What would you do differently if you had this information?"
+    ],
+    tips: [
+      "Record requirements in the stakeholder's own words; one question per requirement.",
+      "Capture KPIs separately — they often reveal the facts you will need.",
+      "Use MoSCoW priority so the first release is small and valuable.",
+      "Write down assumptions and open questions instead of guessing."
+    ],
+    pitfalls: [
+      'Writing report specifications ("a monthly PDF with 12 columns") instead of questions.',
+      "Silently filling gaps — anything uncertain belongs in open questions."
+    ],
+    examples: [
+      '"Did a promotion increase sales, and did it cannibalise other products?" — KPIs: promotion lift, incremental margin.'
+    ]
+  },
+  processes: {
+    why: "Step 1 of the four-step design: select the business process. A business process is an operational event that produces measurements — taking an order, shipping, paying a claim. Each one becomes (at least) one fact table and one row of the bus matrix.",
+    ask: [
+      "Which business events produce the numbers behind each requirement?",
+      "Which source system captures that event, and who owns it?",
+      "Is the data available at the most detailed level?",
+      "How valuable is this process to the business, and how feasible is it to deliver?"
+    ],
+    tips: [
+      'Name processes as events or activities ("Retail sales", "Claims submitted"), not departments or reports.',
+      "Link each requirement to the processes that answer it — unlinked requirements expose missing processes.",
+      "Score business value and feasibility 1–5; build the high-high processes first."
+    ],
+    pitfalls: [
+      'Modelling a department ("Marketing") instead of its processes ("Campaign responses", "Email sends").',
+      "Merging two events with different grains into one process."
+    ],
+    examples: ["Retail: Retail sales · Store inventory · Purchase order receipts · Online order fulfilment."]
+  },
+  grain: {
+    why: "Step 2: declare the grain — exactly what one row in the fact table represents. It is the most important design decision. Declare it in business terms before choosing dimensions or facts, and prefer the most atomic grain the source can provide.",
+    ask: [
+      "What is the most detailed level at which this event is captured?",
+      "What exactly is one row? An order, an order line, a daily balance?",
+      "Does each row represent an event (transaction), a period (snapshot) or the lifetime of something (accumulating snapshot)?"
+    ],
+    tips: [
+      'Use the form "One row per …".',
+      "Atomic grain answers questions nobody has asked yet; summaries can always be built from it.",
+      "If two measures have different grains, they belong in different fact tables."
+    ],
+    pitfalls: [
+      'Choosing a summarised grain to "save space" and losing the ability to drill down.',
+      "Mixing grains in one fact table (for example order headers and order lines)."
+    ],
+    examples: [
+      'Transaction: "One row per product scanned on a sales transaction line."',
+      'Periodic snapshot: "One row per product per store per day."',
+      'Accumulating snapshot: "One row per order line, updated at each fulfilment milestone."'
+    ]
+  },
+  dimensions: {
+    why: "Step 3: identify the dimensions — the who, what, where, when, why and how that describe each row at the declared grain. Dimensions that mean the same thing across processes must be conformed (shared), because that is what lets you compare and drill across processes.",
+    ask: [
+      "At this grain, who is involved? What is being measured? Where? When? Why? How?",
+      "Which attributes do people filter, group and label reports by?",
+      "Is this the same Customer (Product, Store, …) as in the other processes?",
+      "Does a date play several roles (order date, ship date)?"
+    ],
+    tips: [
+      "Reuse a dimension across processes whenever it means the same thing — that is a conformed dimension.",
+      'Use roles for role-playing dimensions instead of creating "Order date" and "Ship date" dimensions.',
+      "Transaction numbers with no attributes are degenerate dimensions.",
+      "Note which attributes need history (SCD type 2)."
+    ],
+    pitfalls: [
+      "Creating slightly different versions of the same dimension per process.",
+      "Putting descriptive text in the fact table instead of a dimension.",
+      "Forgetting the date dimension."
+    ],
+    examples: ["Retail sales: Date, Product, Store, Promotion, Customer, Employee (as Cashier), Payment method, POS transaction number."]
+  },
+  facts: {
+    why: "Step 4: identify the facts — the numeric measurements produced by the event at the declared grain. Knowing whether a fact is additive, semi-additive or non-additive tells report builders how it can be aggregated.",
+    ask: [
+      "What numbers does this event produce at the declared grain?",
+      "Which KPIs from the requirements are built from these numbers?",
+      "Can this number be summed across all dimensions? Across time?"
+    ],
+    tips: [
+      "Prefer additive facts; store the additive parts of ratios (numerator and denominator).",
+      "Balances and levels are semi-additive — do not sum them over time.",
+      "A process with no numeric measures can still be useful as a factless fact table."
+    ],
+    pitfalls: [
+      "Storing percentages or unit prices and then summing them.",
+      "Adding facts that belong to a different grain."
+    ],
+    examples: ["Additive: sales amount, quantity. Semi-additive: inventory on hand. Non-additive: unit price, margin %."]
+  },
+  bubbles: {
+    why: "The bubble diagram is Kimball's high-level model: one per business process, with the process in the centre and its dimensions around it. It is the artefact to review with business stakeholders before any detailed design.",
+    ask: [
+      "Looking at this diagram, can you answer your questions by combining these dimensions?",
+      "Is anything missing that you would want to filter or group by?",
+      "Does the grain match how you think about this process?"
+    ],
+    tips: [
+      "Walk stakeholders through one diagram at a time.",
+      "Amber bubbles are conformed — point out how they connect processes.",
+      "Export SVG or PNG for slides and documents."
+    ],
+    pitfalls: ["Reviewing table designs with business users — the bubble diagram is the right level."],
+    examples: []
+  },
+  matrix: {
+    why: "The enterprise bus matrix lists business processes as rows and dimensions as columns. It is the architecture plan for an integrated warehouse: conformed columns are built once and reused, and each row can be delivered incrementally.",
+    ask: [
+      "Which dimensions are shared by most processes? Who owns their definition?",
+      "Is there a column used by only one process that should really be shared?",
+      "In which order should the rows be delivered?"
+    ],
+    tips: [
+      "Columns used by many rows are your most valuable conformed dimensions — agree their definitions first.",
+      "Sort rows by priority to plan iterations.",
+      "Keep the matrix on the wall (or in the README) — it is a communication tool."
+    ],
+    pitfalls: [
+      "Columns that are near-duplicates (Customer vs Client) — conform them.",
+      "Treating the matrix as finished; it grows with every new process."
+    ],
+    examples: []
+  },
+  review: {
+    why: "Before handing over, resolve errors and warnings, check open questions with their owners, and export the deliverables for review with the sponsor.",
+    ask: [
+      "Are all must-have requirements linked to a modelled process?",
+      "Which open questions block the first iteration?",
+      "Who signs off the bus matrix and the first bubble diagrams?"
+    ],
+    tips: [
+      "Errors must be fixed; warnings usually should be; notes are judgement calls.",
+      "Share requirements.md plus the bubble diagrams with stakeholders.",
+      "Ask Claude to render the deliverables and draft the next step (detailed dimension design)."
+    ],
+    pitfalls: ['Skipping the sponsor review because the diagrams "look right".'],
+    examples: []
+  }
+};
+var INTERVIEW_QUESTIONS = {
+  executive: [
+    "What are the organisation's objectives for the next year? How is success measured?",
+    "Which decisions would you make differently with better information?",
+    "What are the biggest risks or problems in your area right now?",
+    "How do you compare performance today — over time, against plan, against competitors?",
+    "What would make this program a success in your eyes?"
+  ],
+  business: [
+    "Describe your team's responsibilities. What events or activities do you manage?",
+    "Which reports do you use today? What do you do with them? What is missing?",
+    "How do you measure your team's performance? Which KPIs?",
+    "How do you need to slice those numbers — by product, customer, region, time…?",
+    "How far back do you need history, and how current must the data be?"
+  ],
+  analyst: [
+    "Which analyses do you run most often, and how long do they take?",
+    "Where does the data come from today, and how much manual work is involved?",
+    "Which numbers are disputed or reconciled by hand?",
+    "Which questions are you asked that you cannot answer?",
+    "Which definitions differ between departments (customer, revenue, active)?"
+  ],
+  it: [
+    "Which systems capture these business events? At what level of detail?",
+    "How reliable is the data? Known quality issues, late or missing records?",
+    "How are changes captured — updates in place, history tables, change logs?",
+    "Which identifiers link systems together (customer id, product code)?",
+    "Are there constraints on access, volume, privacy or load windows?"
+  ],
+  other: [
+    "How do you use information from this area today?",
+    "What questions would you like answered?",
+    "Who else should we talk to?"
+  ]
+};
 
 // src/cli/io.ts
 import { existsSync } from "node:fs";
@@ -2234,6 +2474,7 @@ Commands
   serve [file]       Open the guided UI on the project file with live sync
       --port <n>         Port (default ${DEFAULT_PORT})
       --open             Open the browser
+  guide [phase]      Coaching notes for a phase: why, what to ask, tips, pitfalls
   examples           List example projects
   help, --help       Show this help
   version, --version Show the version
@@ -2378,6 +2619,32 @@ Changes in the browser are saved to the file; edits to the file appear in the br
         if (opts.open) io.openUrl(server.url);
         await io.waitForExit();
         await server.close();
+        return 0;
+      }
+      case "guide": {
+        const phase = PHASES.find((p) => p.id === fileArg);
+        if (!fileArg) {
+          io.out('Phases (run "kimball guide <phase>" for coaching notes):\n\n');
+          for (const p of PHASES) io.out(`  ${String(p.number).padStart(2)}  ${p.id.padEnd(13)} ${p.goal}
+`);
+          return 0;
+        }
+        if (!phase) throw new CliError(`Unknown phase "${fileArg}". Phases: ${PHASES.map((p) => p.id).join(", ")}.`);
+        const g = GUIDANCE[phase.id];
+        const list2 = (title, items) => items.length ? `
+## ${title}
+${items.map((i) => `- ${i}`).join("\n")}
+` : "";
+        io.out(`# Phase ${phase.number}: ${phase.title}
+
+Goal: ${phase.goal}
+
+${g.why}
+`);
+        io.out(list2("Ask", g.ask) + list2("Tips", g.tips) + list2("Avoid", g.pitfalls) + list2("Examples", g.examples));
+        if (phase.id === "stakeholders") {
+          for (const t of STAKEHOLDER_TYPES) io.out(list2(`Interview questions — ${t.label}`, INTERVIEW_QUESTIONS[t.value]));
+        }
         return 0;
       }
       case "examples": {

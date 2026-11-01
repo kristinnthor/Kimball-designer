@@ -363,9 +363,16 @@ export function processesUsing(project: KimballProject, dimensionId: Id): Busine
   return project.processes.filter((p) => p.dimensions.some((u) => u.dimensionId === dimensionId));
 }
 
-/** A dimension is conformed (shared) when two or more business processes use it. */
+/**
+ * A dimension is conformed (shared) when two or more business processes use it.
+ * Degenerate dimensions live in the fact table itself, so they are never conformed.
+ */
+export function isConformedUsage(kind: DimensionKind | undefined, usageCount: number): boolean {
+  return usageCount >= 2 && kind !== 'degenerate';
+}
+
 export function isConformed(project: KimballProject, dimensionId: Id): boolean {
-  return processesUsing(project, dimensionId).length >= 2;
+  return isConformedUsage(dimensionById(project, dimensionId)?.kind, processesUsing(project, dimensionId).length);
 }
 
 export function isDateDimension(dimension: Dimension): boolean {

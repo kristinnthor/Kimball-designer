@@ -47,7 +47,7 @@ export const RULES: RuleInfo[] = [
   { code: 'KD205', severity: 'info', title: 'Process has no value/feasibility score' },
 ];
 
-const GRAIN_PATTERN = /\b(one|a single|each)\s+(row|record|line)\s+(per|for each|for every|for)\b/i;
+export const GRAIN_PATTERN = /\b(one|a single|each)\s+(row|record|line)\s+(per|for each|for every|for)\b/i;
 
 export function validateProject(project: KimballProject): Finding[] {
   const findings: Finding[] = [];
@@ -69,6 +69,7 @@ export function validateProject(project: KimballProject): Finding[] {
   // KD002 — unique ids across the whole file
   const seen = new Map<string, number>();
   const allIds: string[] = [
+    meta.id,
     ...stakeholders.map((s) => s.id),
     ...requirements.map((r) => r.id),
     ...processes.map((p) => p.id),

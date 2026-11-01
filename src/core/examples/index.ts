@@ -19,7 +19,7 @@ export const EXAMPLES: ExampleInfo[] = [
 const DATA: Record<ExampleInfo['id'], unknown> = { retail, saas, healthcare };
 
 export function isExampleId(id: string): id is ExampleInfo['id'] {
-  return id in DATA;
+  return Object.prototype.hasOwnProperty.call(DATA, id);
 }
 
 /** A fresh, normalised copy of an example project. */

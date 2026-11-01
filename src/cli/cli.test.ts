@@ -102,3 +102,18 @@ describe('kimball CLI', () => {
     expect(existsSync(join(dir, 'live.kimball.json'))).toBe(true);
   });
 });
+
+describe('kimball guide', () => {
+  it('lists phases and prints coaching notes for one phase', async () => {
+    expect(await run('guide')).toBe(0);
+    expect(stdout).toContain('grain');
+    stdout = '';
+    expect(await run('guide', 'grain')).toBe(0);
+    expect(stdout).toContain('# Phase 5: Grain');
+    expect(stdout).toContain('## Ask');
+    stdout = '';
+    expect(await run('guide', 'stakeholders')).toBe(0);
+    expect(stdout).toContain('Interview questions — Executive');
+    expect(await run('guide', 'nope')).toBe(1);
+  });
+});

@@ -10,3 +10,4 @@ export * from './text';
 export * from './theme';
 export * from './version';
 export * from './examples';
+export * from './guidance';

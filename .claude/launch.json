@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kimball-ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "kimball-serve-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "plugin/skills/kimball-designer/scripts/kimball.mjs",
+        "serve",
+        "kimball/demo.kimball.json",
+        "--port",
+        "4180"
+      ],
+      "port": 4180
+    }
+  ]
+}

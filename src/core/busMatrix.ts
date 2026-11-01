@@ -1,5 +1,5 @@
 import { APP_VERSION } from './version';
-import { displayName, priorityScore, type BusinessProcess, type Dimension, type KimballProject } from './model';
+import { displayName, isConformedUsage, priorityScore, type BusinessProcess, type Dimension, type KimballProject } from './model';
 import { FONT_SANS, PALETTES, type ThemeName } from './theme';
 import { csvCell, escapeXml, mdCell } from './text';
 
@@ -45,7 +45,7 @@ export function deriveBusMatrix(project: KimballProject, options: BusMatrixOptio
 
   let columns: MatrixColumn[] = project.dimensions.map((dimension) => {
     const usageCount = usage.get(dimension.id) ?? 0;
-    return { dimension, usageCount, conformed: usageCount >= 2 };
+    return { dimension, usageCount, conformed: isConformedUsage(dimension.kind, usageCount) };
   });
   if (!includeUnused) columns = columns.filter((c) => c.usageCount > 0);
   const catalogueIndex = new Map(project.dimensions.map((d, i) => [d.id, i]));
@@ -70,7 +70,7 @@ export function deriveBusMatrix(project: KimballProject, options: BusMatrixOptio
     process,
     cells: columns.map(({ dimension }) => {
       const usages = process.dimensions.filter((u) => u.dimensionId === dimension.id);
-      return { used: usages.length > 0, roles: usages.flatMap((u) => u.roles) };
+      return { used: usages.length > 0, roles: [...new Set(usages.flatMap((u) => u.roles))] };
     }),
   }));
 

@@ -1,18 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { APP_VERSION } from '../core/version';
+import './styles/app.css';
+import { App } from './App';
+import { startSync } from './store/sync';
 
-function App() {
-  return (
-    <main>
-      <h1>Kimball Designer</h1>
-      <p>Version {APP_VERSION}</p>
-    </main>
+const root = createRoot(document.getElementById('root')!);
+
+// Detect `kimball serve` (live file sync) before the first render so the right project shows up.
+void startSync().finally(() => {
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
   );
-}
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+});
