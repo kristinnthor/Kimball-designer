@@ -9,9 +9,10 @@ const copies = [
 ];
 
 for (const { from, to, match } of copies) {
+  // Clear previous outputs first so assets removed from src/ don't linger in the skill.
+  if (existsSync(to)) for (const f of readdirSync(to)) if (match.test(f)) rmSync(join(to, f));
   if (!existsSync(from)) continue;
   mkdirSync(to, { recursive: true });
-  for (const f of readdirSync(to)) if (match.test(f)) rmSync(join(to, f));
   for (const f of readdirSync(from).filter((n) => match.test(n)).sort()) {
     copyFileSync(join(from, f), join(to, f));
     console.log(`synced ${join(to, f)}`);

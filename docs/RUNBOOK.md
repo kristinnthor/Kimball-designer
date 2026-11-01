@@ -59,6 +59,7 @@ flowchart LR
 ### 3.3 Pull requests
 - Template: `.github/pull_request_template.md` (summary, issues closed, how verified, screenshots).
 - Must pass **CI**: typecheck, unit tests, build, skill-bundle drift check.
+- **Sourcery review** (a third-party app installed on the account) also comments on PRs. It is advisory and non-blocking: its findings are triaged, and the useful ones are fixed in the same or the next PR.
 - Merge method: **squash**. Branch deleted after merge.
 - During autonomous sessions Claude merges its own PRs once CI is green ([ADR-009](DECISIONS.md#adr-009-autonomous-delivery-workflow)). Every merge is recorded in the progress log, so it can be reviewed afterwards and reverted if needed.
 
@@ -118,6 +119,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | PR: `kimball` CLI (init, summary, validate, render) and `kimball serve` live-sync server (#13, #14) | CLI PR |
 | 2026-11-01 | PR: core engine — model, JSON Schema, validation (16 rules), bus matrix, bubble diagrams, requirements doc, 3 example projects (#8–#12; part of #26) | core PR |
 | 2026-11-01 | Merged: toolchain scaffold + CI (#6, #7) | [#37](https://github.com/kristinnthor/Kimball-designer/pull/37) |
 | 2026-11-01 | Bootstrap: branding, runbook, architecture, ADRs, methodology, roadmap, templates | initial commit |

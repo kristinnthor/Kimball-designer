@@ -31,7 +31,7 @@ Short records of the decisions that shape Kimball Designer. New decisions are ap
 ### ADR-003: React + Vite + TypeScript UI, built to a single offline HTML file
 
 **Context.** Skills are folders. Users may be offline or behind strict proxies; the UI must open from `file://` and from `kimball serve`.
-**Decision.** React 18 + TypeScript, plain CSS on top of `brand/tokens.css`, no CSS framework, no web fonts, no CDN. `vite-plugin-singlefile` inlines everything into `ui/index.html`. Hash-based routing.
+**Decision.** React 19 + TypeScript, plain CSS on top of `brand/tokens.css`, no CSS framework, no web fonts, no CDN. `vite-plugin-singlefile` inlines everything into `ui/index.html`. Hash-based routing.
 **Alternatives.** Svelte/Preact (smaller, but React is more familiar to contributors); a hosted-only app (breaks offline use).
 
 ### ADR-004: Zero-dependency CLI bundle committed to the skill, guarded by CI
