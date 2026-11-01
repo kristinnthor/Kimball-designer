@@ -1,7 +1,8 @@
 import { PHASE_IDS, type KimballProject, type PhaseId } from './model';
+import { isReadyToBuild } from './physical';
 import { countBySeverity, validateProject } from './validate';
 
-export type StageId = 'discover' | 'model' | 'deliver';
+export type StageId = 'discover' | 'model' | 'deliver' | 'build';
 
 export interface StageDef {
   id: StageId;
@@ -22,6 +23,7 @@ export const STAGES: StageDef[] = [
   { id: 'discover', title: 'Discover', description: 'Understand the business: scope, people and their questions.' },
   { id: 'model', title: 'Model', description: 'Apply the four-step design: process, grain, dimensions, facts.' },
   { id: 'deliver', title: 'Deliver', description: 'Review the bubble diagrams and bus matrix, then export.' },
+  { id: 'build', title: 'Build', description: 'Try the design on sample data and get the SQL to build it.' },
 ];
 
 export const PHASES: PhaseDef[] = [
@@ -76,6 +78,13 @@ export const PHASES: PhaseDef[] = [
     stage: 'deliver',
     title: 'Review & export',
     goal: 'Resolve findings and export the deliverables.',
+  },
+  {
+    id: 'prototype',
+    number: 11,
+    stage: 'build',
+    title: 'Prototype',
+    goal: 'Explore the design as tables with sample data, then get the CREATE TABLE script and index advice.',
   },
 ];
 
@@ -199,6 +208,10 @@ export function phaseStatus(project: KimballProject, id: PhaseId, errorCount?: n
               ? 'No errors or warnings'
               : `${plural(errorCount, 'error')}, ${plural(warningCount, 'warning')}`,
       };
+    }
+    case 'prototype': {
+      const ready = processes.filter(isReadyToBuild).length;
+      return status(id, ready, n, n === 0 ? 'Add business processes first' : `${ready} of ${n} fact tables ready to build`);
     }
   }
 }

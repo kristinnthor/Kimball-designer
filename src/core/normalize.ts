@@ -1,12 +1,15 @@
 import {
   ID_PREFIX,
   PHASE_IDS,
+  SAMPLE_ROWS_MAX,
   SCHEMA_URL,
+  defaultPhysicalSettings,
   SCHEMA_VERSION,
   newId,
   type Additivity,
   type Assumption,
   type BusinessProcess,
+  type DataType,
   type Dimension,
   type DimensionAttribute,
   type DimensionKind,
@@ -17,9 +20,11 @@ import {
   type Measure,
   type OpenQuestion,
   type PhaseId,
+  type PhysicalSettings,
   type Priority,
   type Requirement,
   type ScdType,
+  type SqlDialect,
   type Stakeholder,
   type StakeholderType,
 } from './model';
@@ -63,6 +68,50 @@ const FACT_TYPES = [
 ] as const satisfies readonly FactTableType[];
 const ADDITIVITY = ['additive', 'semi-additive', 'non-additive'] as const satisfies readonly Additivity[];
 const DIM_KINDS = ['standard', 'date', 'degenerate', 'junk'] as const satisfies readonly DimensionKind[];
+const DATA_TYPES = ['text', 'integer', 'decimal', 'date', 'boolean'] as const satisfies readonly DataType[];
+const DIALECTS = ['postgres', 'sqlserver', 'snowflake'] as const satisfies readonly SqlDialect[];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isoDate = (v: unknown): string | null => {
+  const s = str(v).trim();
+  return ISO_DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s) ? s : null;
+};
+
+/** Optional physical-design fields: copied only when valid, so files without them stay unchanged. */
+function physicalAttributeFields(o: Obj): Pick<DimensionAttribute, 'dataType' | 'businessKey' | 'sampleValues'> {
+  const out: Pick<DimensionAttribute, 'dataType' | 'businessKey' | 'sampleValues'> = {};
+  const dataType = nullableOneOf(o.dataType, DATA_TYPES);
+  if (dataType) out.dataType = dataType;
+  if (o.businessKey === true) out.businessKey = true;
+  const samples = strList(o.sampleValues).slice(0, 500);
+  if (samples.length) out.sampleValues = samples;
+  return out;
+}
+
+function sampleRange(v: unknown): [number, number] | null {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const [a, b] = v.map((x) => (typeof x === 'string' && x.trim() ? Number(x) : x));
+  if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return a <= b ? [a, b] : [b, a];
+}
+
+function normalizePhysical(v: unknown, createdAt: string): PhysicalSettings | undefined {
+  if (!isObj(v)) return undefined;
+  const defaults = defaultPhysicalSettings(createdAt);
+  const seed = typeof v.seed === 'number' && Number.isFinite(v.seed) ? Math.abs(Math.trunc(v.seed)) % 2 ** 31 : defaults.seed;
+  let dateFrom = isoDate(v.dateFrom) ?? defaults.dateFrom;
+  let dateTo = isoDate(v.dateTo) ?? defaults.dateTo;
+  if (dateFrom > dateTo) [dateFrom, dateTo] = [dateTo, dateFrom];
+  const rows: Record<string, number> = {};
+  if (isObj(v.rows)) {
+    for (const [key, n] of Object.entries(v.rows)) {
+      const k = safeId(key);
+      const count = typeof n === 'string' && n.trim() ? Number(n) : n;
+      if (k && typeof count === 'number' && Number.isFinite(count) && count >= 1) rows[k] = Math.min(SAMPLE_ROWS_MAX, Math.round(count));
+    }
+  }
+  return { dialect: oneOf(v.dialect, DIALECTS, 'postgres'), seed, dateFrom, dateTo, rows };
+}
 
 function normalizeStakeholder(o: Obj): Stakeholder {
   return {
@@ -89,13 +138,18 @@ function normalizeRequirement(o: Obj): Requirement {
 }
 
 function normalizeMeasure(o: Obj): Measure {
-  return {
+  const measure: Measure = {
     id: id(o.id, ID_PREFIX.measure),
     name: str(o.name),
     description: str(o.description),
     additivity: oneOf(o.additivity, ADDITIVITY, 'additive'),
     unit: str(o.unit),
   };
+  const dataType = nullableOneOf(o.dataType, ['integer', 'decimal'] as const);
+  if (dataType) measure.dataType = dataType;
+  const range = sampleRange(o.sampleRange);
+  if (range) measure.sampleRange = range;
+  return measure;
 }
 
 function normalizeUsage(v: unknown): DimensionUsage | null {
@@ -128,7 +182,7 @@ function normalizeAttribute(v: unknown): DimensionAttribute | null {
   if (typeof v === 'string' && v.trim()) return { id: newId(ID_PREFIX.attribute), name: v.trim(), description: '', scdType: null };
   if (!isObj(v)) return null;
   const scd = typeof v.scdType === 'number' && [0, 1, 2, 3].includes(v.scdType) ? (v.scdType as ScdType) : null;
-  return { id: id(v.id, ID_PREFIX.attribute), name: str(v.name), description: str(v.description), scdType: scd };
+  return { id: id(v.id, ID_PREFIX.attribute), name: str(v.name), description: str(v.description), scdType: scd, ...physicalAttributeFields(v) };
 }
 
 function normalizeDimension(o: Obj): Dimension {
@@ -174,7 +228,9 @@ export function normalizeProject(input: unknown, now: string = new Date().toISOS
     );
   }
   const meta = isObj(input.meta) ? input.meta : {};
-  return {
+  const createdAt = str(meta.createdAt) || now;
+  const physical = normalizePhysical(input.physical, createdAt);
+  const project: KimballProject = {
     $schema: SCHEMA_URL,
     schemaVersion: SCHEMA_VERSION,
     meta: {
@@ -186,7 +242,7 @@ export function normalizeProject(input: unknown, now: string = new Date().toISOS
       scopeOut: str(meta.scopeOut),
       successCriteria: strList(meta.successCriteria),
       currentPhase: oneOf<PhaseId>(meta.currentPhase, PHASE_IDS, 'kickoff'),
-      createdAt: str(meta.createdAt) || now,
+      createdAt,
       updatedAt: str(meta.updatedAt) || now,
     },
     stakeholders: list(input.stakeholders).map(normalizeStakeholder),
@@ -200,6 +256,8 @@ export function normalizeProject(input: unknown, now: string = new Date().toISOS
       .map(normalizeQuestion)
       .filter((q): q is OpenQuestion => q !== null),
   };
+  if (physical) project.physical = physical;
+  return project;
 }
 
 /** Parses project file text. Throws {@link ProjectParseError} with a readable message. */
