@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kristinnthor/Kimball-designer/main/plugin/skills/kimball-designer/schema/kimball-project.schema.json",
+  "title": "Kimball Designer project",
+  "description": "A Kimball requirements-gathering project: stakeholders, requirements, business processes (grain, dimensions, facts) and dimensions. The bus matrix and bubble diagrams are derived from processes[].dimensions[].",
+  "type": "object",
+  "required": ["schemaVersion", "meta", "stakeholders", "requirements", "processes", "dimensions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0" },
+    "meta": { "$ref": "#/$defs/meta" },
+    "stakeholders": { "type": "array", "items": { "$ref": "#/$defs/stakeholder" } },
+    "requirements": { "type": "array", "items": { "$ref": "#/$defs/requirement" } },
+    "processes": { "type": "array", "items": { "$ref": "#/$defs/process" } },
+    "dimensions": { "type": "array", "items": { "$ref": "#/$defs/dimension" } },
+    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+    "openQuestions": { "type": "array", "items": { "$ref": "#/$defs/openQuestion" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "description": "Stable identifier, unique within the file. Readable ids such as \"dm_date\" are encouraged."
+    },
+    "text": { "type": "string" },
+    "textList": { "type": "array", "items": { "type": "string" } },
+    "score": {
+      "oneOf": [{ "type": "integer", "minimum": 1, "maximum": 5 }, { "type": "null" }]
+    },
+    "phase": {
+      "enum": ["kickoff", "stakeholders", "requirements", "processes", "grain", "dimensions", "facts", "bubbles", "matrix", "review"]
+    },
+    "meta": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "description": "Short project name the sponsor recognises." },
+        "purpose": { "type": "string", "description": "Why the program exists; the business problem it solves." },
+        "sponsor": { "type": "string" },
+        "scopeIn": { "type": "string" },
+        "scopeOut": { "type": "string" },
+        "successCriteria": { "$ref": "#/$defs/textList" },
+        "currentPhase": { "$ref": "#/$defs/phase" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "stakeholder": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "type": { "enum": ["executive", "business", "analyst", "it", "other"] },
+        "interviewStatus": { "enum": ["planned", "done", "skipped"] },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["id", "statement"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "type": "string", "description": "A business question or need, in the stakeholder's words." },
+        "kpis": { "$ref": "#/$defs/textList" },
+        "priority": { "enum": ["must", "should", "could", "wont"] },
+        "stakeholderIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "processIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "measure": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "additivity": { "enum": ["additive", "semi-additive", "non-additive"] },
+        "unit": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "dimensionUsage": {
+      "type": "object",
+      "required": ["dimensionId"],
+      "properties": {
+        "dimensionId": { "$ref": "#/$defs/id" },
+        "roles": {
+          "$ref": "#/$defs/textList",
+          "description": "Role names for a role-playing dimension, e.g. [\"Order date\", \"Ship date\"]. Empty for a single unnamed role."
+        }
+      },
+      "additionalProperties": false
+    },
+    "process": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "description": "Name the business event, e.g. \"Retail sales\", \"Claims submitted\"." },
+        "description": { "type": "string" },
+        "owner": { "type": "string" },
+        "sourceSystems": { "$ref": "#/$defs/textList" },
+        "grain": { "type": "string", "description": "What one fact row represents: \"One row per …\"." },
+        "factTableType": {
+          "oneOf": [
+            { "enum": ["transaction", "periodic-snapshot", "accumulating-snapshot", "factless"] },
+            { "type": "null" }
+          ]
+        },
+        "businessValue": { "$ref": "#/$defs/score" },
+        "feasibility": { "$ref": "#/$defs/score" },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/measure" } },
+        "dimensions": { "type": "array", "items": { "$ref": "#/$defs/dimensionUsage" } }
+      },
+      "additionalProperties": false
+    },
+    "attribute": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "scdType": { "oneOf": [{ "enum": [0, 1, 2, 3] }, { "type": "null" }] }
+      },
+      "additionalProperties": false
+    },
+    "dimension": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "kind": { "enum": ["standard", "date", "degenerate", "junk"] },
+        "description": { "type": "string" },
+        "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute" } },
+        "hierarchies": { "$ref": "#/$defs/textList" }
+      },
+      "additionalProperties": false
+    },
+    "assumption": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "text": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "openQuestion": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "type": "string" },
+        "owner": { "type": "string" },
+        "status": { "enum": ["open", "answered"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

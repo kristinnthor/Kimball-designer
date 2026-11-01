@@ -1,0 +1,235 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kristinnthor/Kimball-designer/main/plugin/skills/kimball-designer/schema/kimball-project.schema.json",
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "prj_retail_example",
+    "name": "Retail analytics",
+    "purpose": "Give merchandising and store operations one trusted view of sales, inventory, vendor deliveries and online fulfilment across 120 stores and the web shop.",
+    "sponsor": "Dana Ortiz, VP Merchandising",
+    "scopeIn": "Point-of-sale sales, daily store inventory, purchase order receipts, promotions and online order fulfilment for all stores and the web shop.",
+    "scopeOut": "Workforce scheduling, the finance general ledger and loyalty-app clickstream (phase 2).",
+    "successCriteria": [
+      "Weekly sales and margin by category available by 08:00 every Monday",
+      "Promotion lift measured for every promotion within two weeks of its end",
+      "Out-of-stock rate reported per store per day"
+    ],
+    "currentPhase": "review",
+    "createdAt": "2026-11-01T09:00:00.000Z",
+    "updatedAt": "2026-11-01T09:00:00.000Z"
+  },
+  "stakeholders": [
+    { "id": "sh_dana", "name": "Dana Ortiz", "role": "VP Merchandising", "department": "Merchandising", "type": "executive", "interviewStatus": "done", "notes": "Wants category growth and margin trends; frustrated that store and finance numbers never match." },
+    { "id": "sh_sam", "name": "Sam Lee", "role": "Category manager, Fresh", "department": "Merchandising", "type": "business", "interviewStatus": "done", "notes": "Plans 30+ promotions a quarter; cannot tell which ones worked." },
+    { "id": "sh_priya", "name": "Priya Nair", "role": "Director, Store operations", "department": "Operations", "type": "business", "interviewStatus": "done", "notes": "Out-of-stocks and late vendor deliveries are the top store complaint. Also owns online order pick-up." },
+    { "id": "sh_jonas", "name": "Jonas Berg", "role": "BI analyst", "department": "Finance", "type": "analyst", "interviewStatus": "done", "notes": "Builds the weekly sales pack by hand from three POS extracts." },
+    { "id": "sh_elena", "name": "Elena Petrova", "role": "POS & ERP platform lead", "department": "IT", "type": "it", "interviewStatus": "done", "notes": "POS line-level data available since 2022; ERP receipts are reliable; e-commerce milestones live in the order service." }
+  ],
+  "requirements": [
+    { "id": "rq_category_growth", "statement": "Which categories and brands are growing, by store, region and week?", "kpis": ["Net sales amount", "Units sold", "Gross margin %"], "priority": "must", "stakeholderIds": ["sh_dana", "sh_jonas"], "processIds": ["bp_retail_sales"], "notes": "" },
+    { "id": "rq_promo_lift", "statement": "Did a promotion increase sales, and did it cannibalise other products?", "kpis": ["Promotion lift", "Incremental margin"], "priority": "must", "stakeholderIds": ["sh_sam"], "processIds": ["bp_retail_sales"], "notes": "Needs a baseline of the same products in non-promoted weeks." },
+    { "id": "rq_out_of_stock", "statement": "Where and when are we out of stock?", "kpis": ["Out-of-stock rate", "Days of supply"], "priority": "must", "stakeholderIds": ["sh_priya"], "processIds": ["bp_store_inventory"], "notes": "" },
+    { "id": "rq_vendor_performance", "statement": "Are vendors delivering on time and complete?", "kpis": ["On-time delivery %", "Fill rate"], "priority": "should", "stakeholderIds": ["sh_dana", "sh_priya"], "processIds": ["bp_po_receipts"], "notes": "" },
+    { "id": "rq_basket", "statement": "What do customers buy together?", "kpis": ["Basket size", "Items per basket"], "priority": "could", "stakeholderIds": ["sh_jonas"], "processIds": ["bp_retail_sales"], "notes": "" },
+    { "id": "rq_fulfilment", "statement": "How long do online orders take from order to delivery, and where do they wait?", "kpis": ["Order cycle time", "On-time delivery %"], "priority": "should", "stakeholderIds": ["sh_priya"], "processIds": ["bp_online_fulfilment"], "notes": "" }
+  ],
+  "processes": [
+    {
+      "id": "bp_retail_sales",
+      "name": "Retail sales",
+      "description": "Every item scanned at a store checkout or sold in the web shop.",
+      "owner": "Dana Ortiz",
+      "sourceSystems": ["POS", "E-commerce platform"],
+      "grain": "One row per product scanned on a sales transaction line",
+      "factTableType": "transaction",
+      "businessValue": 5,
+      "feasibility": 5,
+      "facts": [
+        { "id": "ms_sales_qty", "name": "Sales quantity", "description": "Units sold on the line.", "additivity": "additive", "unit": "units" },
+        { "id": "ms_unit_price", "name": "Regular unit price", "description": "Shelf price before discounts.", "additivity": "non-additive", "unit": "currency" },
+        { "id": "ms_discount", "name": "Discount amount", "description": "Total discount on the line.", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_net_sales", "name": "Net sales amount", "description": "Quantity × price − discount.", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_cost", "name": "Cost amount", "description": "Extended cost of goods sold.", "additivity": "additive", "unit": "currency" },
+        { "id": "ms_margin", "name": "Gross margin amount", "description": "Net sales − cost.", "additivity": "additive", "unit": "currency" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": [] },
+        { "dimensionId": "dm_product", "roles": [] },
+        { "dimensionId": "dm_store", "roles": [] },
+        { "dimensionId": "dm_promotion", "roles": [] },
+        { "dimensionId": "dm_customer", "roles": [] },
+        { "dimensionId": "dm_employee", "roles": ["Cashier"] },
+        { "dimensionId": "dm_payment_method", "roles": [] },
+        { "dimensionId": "dm_pos_txn", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_store_inventory",
+      "name": "Store inventory",
+      "description": "End-of-day stock position for every product in every store.",
+      "owner": "Priya Nair",
+      "sourceSystems": ["ERP inventory"],
+      "grain": "One row per product per store per day",
+      "factTableType": "periodic-snapshot",
+      "businessValue": 4,
+      "feasibility": 4,
+      "facts": [
+        { "id": "ms_qty_on_hand", "name": "Quantity on hand", "description": "Units in stock at close of day.", "additivity": "semi-additive", "unit": "units" },
+        { "id": "ms_qty_on_order", "name": "Quantity on order", "description": "Units ordered but not received.", "additivity": "semi-additive", "unit": "units" },
+        { "id": "ms_inventory_value", "name": "Inventory value at cost", "description": "", "additivity": "semi-additive", "unit": "currency" },
+        { "id": "ms_days_of_supply", "name": "Days of supply", "description": "On hand ÷ average daily sales. Recompute from parts when aggregating.", "additivity": "non-additive", "unit": "days" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Snapshot date"] },
+        { "dimensionId": "dm_product", "roles": [] },
+        { "dimensionId": "dm_store", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_po_receipts",
+      "name": "Purchase order receipts",
+      "description": "Vendor deliveries received at store and distribution-centre docks.",
+      "owner": "Priya Nair",
+      "sourceSystems": ["ERP purchasing"],
+      "grain": "One row per product line on a received delivery",
+      "factTableType": "transaction",
+      "businessValue": 3,
+      "feasibility": 4,
+      "facts": [
+        { "id": "ms_qty_ordered", "name": "Quantity ordered", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_qty_received", "name": "Quantity received", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_qty_rejected", "name": "Quantity rejected", "description": "Damaged or wrong items.", "additivity": "additive", "unit": "units" },
+        { "id": "ms_received_cost", "name": "Received cost amount", "description": "", "additivity": "additive", "unit": "currency" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Order date", "Expected date", "Receipt date"] },
+        { "dimensionId": "dm_product", "roles": [] },
+        { "dimensionId": "dm_store", "roles": ["Receiving location"] },
+        { "dimensionId": "dm_vendor", "roles": [] },
+        { "dimensionId": "dm_po_number", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_online_fulfilment",
+      "name": "Online order fulfilment",
+      "description": "The life of an online order line from order to delivery.",
+      "owner": "Priya Nair",
+      "sourceSystems": ["Order service", "Carrier tracking feed"],
+      "grain": "One row per online order line, updated at each fulfilment milestone",
+      "factTableType": "accumulating-snapshot",
+      "businessValue": 4,
+      "feasibility": 2,
+      "facts": [
+        { "id": "ms_order_qty", "name": "Order quantity", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_shipped_qty", "name": "Shipped quantity", "description": "", "additivity": "additive", "unit": "units" },
+        { "id": "ms_order_to_ship", "name": "Order-to-ship lag", "description": "", "additivity": "additive", "unit": "hours" },
+        { "id": "ms_ship_to_delivery", "name": "Ship-to-delivery lag", "description": "", "additivity": "additive", "unit": "hours" }
+      ],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Order date", "Pick date", "Ship date", "Delivery date"] },
+        { "dimensionId": "dm_product", "roles": [] },
+        { "dimensionId": "dm_customer", "roles": [] },
+        { "dimensionId": "dm_store", "roles": ["Fulfilling store"] },
+        { "dimensionId": "dm_ship_mode", "roles": [] }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dm_date", "name": "Date", "kind": "date", "description": "One row per calendar day with fiscal (4-4-5) attributes.",
+      "attributes": [
+        { "id": "at_date_date", "name": "Calendar date", "description": "", "scdType": 0 },
+        { "id": "at_date_dow", "name": "Day of week", "description": "", "scdType": 0 },
+        { "id": "at_date_week", "name": "Fiscal week", "description": "", "scdType": 0 },
+        { "id": "at_date_period", "name": "Fiscal period", "description": "", "scdType": 0 },
+        { "id": "at_date_holiday", "name": "Holiday indicator", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": ["Day → Fiscal week → Fiscal period → Fiscal year", "Day → Month → Quarter → Year"]
+    },
+    {
+      "id": "dm_product", "name": "Product", "kind": "standard", "description": "Every SKU sold or stocked.",
+      "attributes": [
+        { "id": "at_prod_sku", "name": "SKU number", "description": "Natural key from the item master.", "scdType": 0 },
+        { "id": "at_prod_desc", "name": "Product description", "description": "", "scdType": 1 },
+        { "id": "at_prod_brand", "name": "Brand", "description": "", "scdType": 2 },
+        { "id": "at_prod_category", "name": "Category", "description": "", "scdType": 2 },
+        { "id": "at_prod_dept", "name": "Department", "description": "", "scdType": 2 },
+        { "id": "at_prod_size", "name": "Package size", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": ["SKU → Brand → Category → Department"]
+    },
+    {
+      "id": "dm_store", "name": "Store", "kind": "standard", "description": "Physical stores, distribution centres and the web shop.",
+      "attributes": [
+        { "id": "at_store_number", "name": "Store number", "description": "", "scdType": 0 },
+        { "id": "at_store_name", "name": "Store name", "description": "", "scdType": 1 },
+        { "id": "at_store_district", "name": "District", "description": "", "scdType": 2 },
+        { "id": "at_store_region", "name": "Region", "description": "", "scdType": 2 },
+        { "id": "at_store_format", "name": "Store format", "description": "Hypermarket, supermarket, express, online.", "scdType": 2 }
+      ],
+      "hierarchies": ["Store → District → Region"]
+    },
+    {
+      "id": "dm_promotion", "name": "Promotion", "kind": "standard", "description": "The promotion conditions in effect when an item was sold. Includes a 'No promotion' row.",
+      "attributes": [
+        { "id": "at_promo_name", "name": "Promotion name", "description": "", "scdType": 1 },
+        { "id": "at_promo_price_type", "name": "Price reduction type", "description": "", "scdType": 1 },
+        { "id": "at_promo_ad_type", "name": "Ad type", "description": "", "scdType": 1 },
+        { "id": "at_promo_display", "name": "Display type", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_customer", "name": "Customer", "kind": "standard", "description": "Loyalty members and online customers. Anonymous store sales use an 'Unknown customer' row.",
+      "attributes": [
+        { "id": "at_cust_card", "name": "Loyalty card number", "description": "", "scdType": 0 },
+        { "id": "at_cust_segment", "name": "Customer segment", "description": "", "scdType": 2 },
+        { "id": "at_cust_region", "name": "Home region", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_employee", "name": "Employee", "kind": "standard", "description": "Store staff.",
+      "attributes": [
+        { "id": "at_emp_name", "name": "Employee name", "description": "", "scdType": 1 },
+        { "id": "at_emp_role", "name": "Job role", "description": "", "scdType": 2 },
+        { "id": "at_emp_store", "name": "Home store", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_payment_method", "name": "Payment method", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_pay_method", "name": "Payment method", "description": "Cash, debit card, credit card, gift card, mobile wallet.", "scdType": 1 },
+        { "id": "at_pay_group", "name": "Payment group", "description": "Cash or electronic.", "scdType": 1 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_vendor", "name": "Vendor", "kind": "standard", "description": "Suppliers of goods.",
+      "attributes": [
+        { "id": "at_vendor_name", "name": "Vendor name", "description": "", "scdType": 1 },
+        { "id": "at_vendor_country", "name": "Country", "description": "", "scdType": 2 },
+        { "id": "at_vendor_tier", "name": "Vendor tier", "description": "", "scdType": 2 }
+      ],
+      "hierarchies": []
+    },
+    {
+      "id": "dm_ship_mode", "name": "Shipping mode", "kind": "standard", "description": "",
+      "attributes": [
+        { "id": "at_ship_mode", "name": "Mode", "description": "Home delivery, click & collect, locker.", "scdType": 1 },
+        { "id": "at_ship_carrier", "name": "Carrier", "description": "", "scdType": 1 }
+      ],
+      "hierarchies": []
+    },
+    { "id": "dm_pos_txn", "name": "POS transaction number", "kind": "degenerate", "description": "Ticket number; groups lines into baskets.", "attributes": [], "hierarchies": [] },
+    { "id": "dm_po_number", "name": "Purchase order number", "kind": "degenerate", "description": "", "attributes": [], "hierarchies": [] }
+  ],
+  "assumptions": [
+    { "id": "as_loyalty", "text": "About 60% of store transactions carry a loyalty card; the rest map to an 'Unknown customer' row." },
+    { "id": "as_calendar", "text": "The fiscal calendar is 4-4-5 and is maintained by Finance." }
+  ],
+  "openQuestions": [
+    { "id": "oq_returns", "text": "Who owns returns data — the POS or the e-commerce platform? Returns may need their own business process.", "owner": "Elena Petrova", "status": "open" },
+    { "id": "oq_overrides", "text": "Are price overrides captured at line level in the POS?", "owner": "Elena Petrova", "status": "answered" }
+  ]
+}
