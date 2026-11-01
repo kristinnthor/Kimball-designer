@@ -28,7 +28,7 @@ flowchart LR
 | Component | Path | Runtime | Responsibility |
 |---|---|---|---|
 | **Core engine** | `src/core/` | Pure TS (browser + Node) | Types, factories, normalisation, JSON Schema, validation rules, phase status, bus matrix derivation, bubble layout, exporters (Markdown, CSV, HTML, SVG, Mermaid), coach guidance content, example projects, zip writer |
-| **Guided UI** | `src/app/` | Browser (React 18) | Phase stepper, editors for each phase, coach panel, bubble diagram & bus matrix views, review/export, persistence & sync |
+| **Guided UI** | `src/app/` | Browser (React 19) | Phase stepper, editors for each phase, coach panel, bubble diagram & bus matrix views, review/export, persistence & sync |
 | **CLI** | `src/cli/` | Node ≥ 18 | `init`, `validate`, `summary`, `render`, `serve` |
 | **Sync server** | `src/cli/server.ts` | Node ≥ 18 | Serves the single-file UI and a small JSON API for the project file |
 | **Skill** | `plugin/skills/kimball-designer/` | Claude | `SKILL.md` workflow, `references/`, `examples/`, `schema/`, plus the **built** `scripts/kimball.mjs` and `ui/index.html` |

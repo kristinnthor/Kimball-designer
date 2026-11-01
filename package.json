@@ -22,7 +22,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "verify:skill": "npm run build:skill && git diff --exit-code --stat -- plugin/"
   },
   "dependencies": {
     "immer": "^11.2.9",

@@ -12,6 +12,7 @@ cd Kimball-designer
 npm ci
 npm run dev        # guided UI with hot reload
 npm run check      # typecheck + tests + builds, same as CI
+npm run verify:skill  # fails if the committed skill bundles are stale (CI runs this too)
 ```
 
 ## Where things live
