@@ -26,8 +26,8 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 |---|---|---|
 | **M0 · Foundation** | ✅ | #2 brand · #3 runbook · #4 architecture · #5 hygiene · #6 scaffold · #7 CI |
 | **M1 · Core engine** | ✅ | #8 model · #9 validation · #10 bus matrix · #11 bubble · #12 req. doc · #13 CLI · #14 serve |
-| **M2 · Guided UI** | 🔄 | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
-| **M3 · Claude skill** | ⏳ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
+| **M2 · Guided UI** | ✅ | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
+| **M3 · Claude skill** | 🔄 | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
 | **M4 · Quality & release** | ⏳ | #33 e2e · #34 a11y · #35 Pages 🙋 · #36 release |
 
 ## 3. How work flows
@@ -119,7 +119,8 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
-| 2026-11-01 | PR: guided UI — 10 phases, coach, bubble diagrams, bus matrix, review/export, live sync; core review fixes (#15–#27) | UI PR |
+| 2026-11-01 | PR: Claude skill — SKILL.md, references, interview guide, plugin marketplace, evals (#28–#32) | skill PR |
+| 2026-11-01 | Merged: guided UI — 10 phases, coach, bubble diagrams, bus matrix, review/export, live sync; core review fixes (#15–#27) | [#40](https://github.com/kristinnthor/Kimball-designer/pull/40) |
 | 2026-11-01 | Merged: `kimball` CLI and `kimball serve` live-sync server (#13, #14) | [#39](https://github.com/kristinnthor/Kimball-designer/pull/39) |
 | 2026-11-01 | Merged: core engine — model, JSON Schema, validation (16 rules), bus matrix, bubble diagrams, requirements doc, 3 example projects (#8–#12) | [#38](https://github.com/kristinnthor/Kimball-designer/pull/38) |
 | 2026-11-01 | Merged: toolchain scaffold + CI (#6, #7) | [#37](https://github.com/kristinnthor/Kimball-designer/pull/37) |

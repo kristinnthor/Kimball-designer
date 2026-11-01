@@ -130,7 +130,7 @@ export function phaseStatus(project: KimballProject, id: PhaseId, errorCount?: n
     warningCount = counts.warning;
   }
   const n = processes.length;
-  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : word.endsWith('s') ? 'es' : 's'}`;
 
   switch (id) {
     case 'kickoff': {

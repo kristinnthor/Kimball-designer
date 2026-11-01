@@ -1,0 +1,95 @@
+{
+  "skill_name": "kimball-designer",
+  "description": "Scenarios for evaluating the kimball-designer skill. Each eval has a prompt, optional starting files, and expectations a grader checks against the transcript and the resulting files.",
+  "evals": [
+    {
+      "id": "new-project-kickoff",
+      "prompt": "I need to design a data warehouse for our coffee shop chain (40 stores). Can you help me gather requirements?",
+      "files": [],
+      "expectations": [
+        "Creates kimball/project.kimball.json with `kimball init` (or equivalent) and a sensible project name",
+        "Offers the guided UI via `kimball serve` and explains that the UI and chat edit the same file",
+        "Asks about purpose/decisions and sponsor before discussing tables or technology",
+        "Asks at most three questions in a single message",
+        "Does not invent business facts such as specific KPIs, owners or source systems without labelling them as suggestions"
+      ]
+    },
+    {
+      "id": "resume-existing-project",
+      "prompt": "Let's continue with the Kimball model.",
+      "files": ["fixtures/half-done.kimball.json"],
+      "expectations": [
+        "Finds the existing project file and runs `kimball summary` before asking anything",
+        "States where the project stands in two or three sentences",
+        "Continues at the suggested next phase (grain) rather than restarting at kickoff",
+        "Runs `kimball guide grain` or otherwise applies grain coaching (\"One row per …\", atomic grain)"
+      ]
+    },
+    {
+      "id": "grain-coaching",
+      "prompt": "For the Orders process I think the grain is 'orders'. Is that ok?",
+      "files": ["fixtures/half-done.kimball.json"],
+      "expectations": [
+        "Explains that the grain should state exactly what one row is, and asks whether it is the order header or the order line",
+        "Recommends the most atomic grain the source captures and explains why in one or two sentences",
+        "Records the agreed grain as \"One row per …\" and a fact table type in the project file",
+        "Re-reads the project file before editing it"
+      ]
+    },
+    {
+      "id": "conformed-dimensions",
+      "prompt": "Our Shipments process needs Customer, Product and a Ship Date. Orders already has Customer, Product and Order Date.",
+      "files": ["fixtures/half-done.kimball.json"],
+      "expectations": [
+        "Reuses the existing Customer and Product dimensions instead of creating duplicates",
+        "Models Ship Date and Order Date as roles of one Date dimension (dimensions[].roles), not as separate dimensions",
+        "Explains briefly that shared dimensions are conformed and why that matters",
+        "Project file stays valid: `kimball validate` reports no KD003 or KD107 findings"
+      ]
+    },
+    {
+      "id": "vague-request-bus-matrix",
+      "prompt": "Just give me a bus matrix for a retail company.",
+      "files": [],
+      "expectations": [
+        "Either starts from the retail example (`kimball init --example retail`) or asks one clarifying question before producing anything",
+        "Clearly labels any content that comes from the example or from typical patterns rather than from the user's business",
+        "Produces the bus matrix as a Markdown table with business processes as rows and dimensions as columns, conformed columns highlighted",
+        "Suggests how to adapt it to the user's actual business processes"
+      ]
+    },
+    {
+      "id": "conflicting-stakeholders",
+      "prompt": "Finance says a customer is whoever is billed, but Sales says it's whoever we ship to. Which is right?",
+      "files": ["fixtures/half-done.kimball.json"],
+      "expectations": [
+        "Does not pick a side as fact; frames it as a conformed-dimension definition question",
+        "Proposes options such as one Customer dimension with Bill-to and Ship-to roles",
+        "Records an open question with an owner (or asks who owns the definition)",
+        "Keeps the answer short and actionable"
+      ]
+    },
+    {
+      "id": "deliver",
+      "prompt": "I think we're done. Produce the deliverables.",
+      "files": ["../../src/core/examples/saas.kimball.json"],
+      "expectations": [
+        "Runs `kimball validate` and reports errors/warnings before rendering",
+        "Runs `kimball render` and lists the generated files",
+        "Shows the bus matrix inline, names the conformed dimensions and recommends the first process to build using business value × feasibility",
+        "Lists open questions that could block the first iteration"
+      ]
+    },
+    {
+      "id": "no-node",
+      "prompt": "Help me sketch a bubble diagram for our claims process. (Note: Node.js is not installed here.)",
+      "files": [],
+      "expectations": [
+        "Does not try to run the kimball CLI repeatedly after learning Node is unavailable",
+        "Asks for or confirms the grain before listing dimensions",
+        "Produces a Mermaid mindmap with the process as root and dimensions as children, and states the grain beneath it",
+        "Offers to record the result in a project file following the schema"
+      ]
+    }
+  ]
+}

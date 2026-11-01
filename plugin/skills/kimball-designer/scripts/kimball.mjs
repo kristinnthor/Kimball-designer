@@ -632,7 +632,7 @@ function phaseStatus(project, id2, errorCount, warningCount) {
     warningCount = counts.warning;
   }
   const n = processes.length;
-  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : word.endsWith("s") ? "es" : "s"}`;
   switch (id2) {
     case "kickoff": {
       const checks = [filled(meta.name), filled(meta.purpose), filled(meta.scopeIn)];

@@ -55,7 +55,7 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 
 ## Quick start
 
-> 🚧 **In development.** Follow progress in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1). The commands below describe the v1.0 target.
+> 🚧 **Pre-release.** Everything below works on `main`; follow the road to v1.0 in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1).
 
 **Install the skill in Claude Code**
 
@@ -64,9 +64,14 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 /plugin install kimball-designer@kimball-designer
 ```
 
-Then ask Claude something like *"Help me gather requirements for a sales data warehouse and build a bus matrix."*
+Then ask Claude something like *"Help me gather requirements for a sales data warehouse and build a bus matrix."* Other options (copying the folder, Claude apps) are in [docs/INSTALL.md](docs/INSTALL.md).
 
-**Or copy the skill manually** — copy `plugin/skills/kimball-designer/` into `~/.claude/skills/` (personal) or `.claude/skills/` (project).
+**What Claude does with the skill**
+
+1. Finds or creates `kimball/project.kimball.json` and offers to open the guided UI with live sync.
+2. Coaches you phase by phase, asking at most three questions at a time and recording your answers. It never makes up business facts; unknowns become open questions.
+3. Validates the model against 16 Kimball rules (`kimball validate`).
+4. Renders the deliverables (`kimball render`) and hands off: the bus matrix, the conformed dimensions, which process to build first, and the blocking questions.
 
 **Use the CLI directly** (Node ≥ 18, no install needed):
 
@@ -81,6 +86,8 @@ node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.k
 | Path | What |
 |---|---|
 | [`plugin/skills/kimball-designer/`](plugin/skills/kimball-designer) | The Claude skill (SKILL.md, references, examples, bundled CLI and UI) |
+| [`.claude-plugin/`](.claude-plugin), [`plugin/`](plugin) | Plugin marketplace and plugin manifests |
+| [`evals/`](evals) | Skill evaluation scenarios |
 | [`src/core/`](src/core) | Shared engine: model, schema, validation, bus matrix, bubble layout, exporters |
 | [`src/app/`](src/app) | Guided web UI (React + TypeScript) |
 | [`src/cli/`](src/cli) | `kimball` CLI and local sync server |
