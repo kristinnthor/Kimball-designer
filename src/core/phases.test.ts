@@ -44,3 +44,12 @@ describe('phases', () => {
     expect(text).toMatch(/Suggested next step: phase 1 "Kickoff"/);
   });
 });
+
+describe('phase details', () => {
+  it('pluralises words ending in s', () => {
+    const p = tinyProject();
+    expect(phaseStatus(p, 'processes').detail).toBe('2 business processes');
+    p.processes.pop();
+    expect(phaseStatus(p, 'processes').detail).toBe('1 business process');
+  });
+});

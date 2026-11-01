@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "prj_bean_and_brew",
+    "name": "Bean & Brew analytics",
+    "purpose": "Help store managers and head office see which products, stores and times drive sales and margin.",
+    "sponsor": "Head of Operations",
+    "scopeIn": "Store sales, online orders and shipments for all 40 stores.",
+    "scopeOut": "Payroll and supplier invoices.",
+    "successCriteria": ["Daily sales by store and product available by 07:00"],
+    "currentPhase": "grain",
+    "createdAt": "2026-11-01T09:00:00.000Z",
+    "updatedAt": "2026-11-01T09:00:00.000Z"
+  },
+  "stakeholders": [
+    { "id": "sh_ops", "name": "Head of Operations", "role": "Sponsor", "department": "Operations", "type": "executive", "interviewStatus": "done", "notes": "Wants margin by store and daypart." },
+    { "id": "sh_it", "name": "POS administrator", "role": "IT", "department": "IT", "type": "it", "interviewStatus": "done", "notes": "POS exports line-level tickets nightly." }
+  ],
+  "requirements": [
+    { "id": "rq_margin_daypart", "statement": "Which products sell best by store and time of day?", "kpis": ["Sales amount", "Units"], "priority": "must", "stakeholderIds": ["sh_ops"], "processIds": ["bp_orders"], "notes": "" },
+    { "id": "rq_ship_time", "statement": "How long do online orders take to ship?", "kpis": ["Days to ship"], "priority": "should", "stakeholderIds": ["sh_ops"], "processIds": ["bp_shipments"], "notes": "" }
+  ],
+  "processes": [
+    {
+      "id": "bp_orders", "name": "Orders", "description": "Store and online orders.", "owner": "Head of Operations", "sourceSystems": ["POS", "Web shop"],
+      "grain": "", "factTableType": null, "businessValue": 5, "feasibility": 4,
+      "facts": [],
+      "dimensions": [
+        { "dimensionId": "dm_date", "roles": ["Order date"] },
+        { "dimensionId": "dm_customer", "roles": [] },
+        { "dimensionId": "dm_product", "roles": [] }
+      ]
+    },
+    {
+      "id": "bp_shipments", "name": "Shipments", "description": "Online orders shipped from stores.", "owner": "", "sourceSystems": ["Web shop"],
+      "grain": "", "factTableType": null, "businessValue": 3, "feasibility": 3,
+      "facts": [], "dimensions": []
+    }
+  ],
+  "dimensions": [
+    { "id": "dm_date", "name": "Date", "kind": "date", "description": "", "attributes": [], "hierarchies": [] },
+    { "id": "dm_customer", "name": "Customer", "kind": "standard", "description": "", "attributes": [], "hierarchies": [] },
+    { "id": "dm_product", "name": "Product", "kind": "standard", "description": "", "attributes": [], "hierarchies": [] }
+  ],
+  "assumptions": [],
+  "openQuestions": []
+}

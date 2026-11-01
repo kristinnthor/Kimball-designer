@@ -18,5 +18,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Interactive bubble diagrams (SVG/PNG/Mermaid export), a keyboard-operable bus matrix grid, and a review phase with findings, deliverables, a zip download and a Claude hand-off summary (#22–#24).
 - Shared coaching content for the UI coach and `kimball guide <phase>` (#25); start from an example in the UI (#26); single-file offline UI bundled in the skill (#27).
 
+- Claude skill `kimball-designer`: an orchestrated ten-phase workflow (SKILL.md) with references (Kimball primer, phase playbook, schema guide, deliverables) and a stakeholder interview guide (#28–#30).
+- Plugin marketplace packaging (`.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`) and an install guide (#31).
+- Skill evaluation scenarios with a fixture project (#32).
+
 ### Fixed
+- Pluralisation in phase details ("business processes").
 - Review feedback on the core engine (wrapping, CSV formula injection, Markdown HTML escaping, id sanitising, duplicate roles, review status, blank scores). Degenerate dimensions are no longer counted as conformed.

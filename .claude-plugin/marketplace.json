@@ -1,0 +1,26 @@
+{
+  "name": "kimball-designer",
+  "owner": {
+    "name": "kristinnthor"
+  },
+  "description": "Kimball Designer — a Claude skill and guided UI for Kimball requirements gathering, bubble diagrams and enterprise bus matrices.",
+  "plugins": [
+    {
+      "name": "kimball-designer",
+      "source": "./plugin",
+      "description": "Guides Kimball requirements gathering — business processes, grain, conformed dimensions, facts — and produces bubble diagrams and an enterprise bus matrix, with a live-synced guided web UI.",
+      "version": "0.1.0",
+      "author": {
+        "name": "kristinnthor"
+      },
+      "category": "data",
+      "tags": [
+        "kimball",
+        "dimensional-modeling",
+        "data-warehouse",
+        "bus-matrix",
+        "requirements"
+      ]
+    }
+  ]
+}
