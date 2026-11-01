@@ -118,6 +118,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-01 | PR: toolchain scaffold + CI (#6, #7) | see PR list |
 | 2026-11-01 | Bootstrap: branding, runbook, architecture, ADRs, methodology, roadmap, templates | initial commit |
 | 2026-11-01 | Backlog created: 5 milestones, 35 issues, 18 labels; tracker pinned | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |
 

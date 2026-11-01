@@ -1,0 +1,10 @@
+{
+  "//": "Enforces that src/core stays pure: no DOM and no Node APIs.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src/core", "src/globals.d.ts"],
+  "exclude": ["src/core/**/*.test.ts"]
+}

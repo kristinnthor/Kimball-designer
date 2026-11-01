@@ -1,0 +1,46 @@
+{
+  "name": "kimball-designer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "From first interview to bus matrix — a Claude skill + guided UI for Kimball requirements gathering, bubble diagrams and enterprise bus matrices.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kristinnthor/Kimball-designer.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build:web": "vite build --mode web",
+    "build:ui": "vite build --mode skill",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:skill": "npm run build:ui && npm run build:cli && node scripts/sync-skill-assets.mjs",
+    "build": "npm run build:web && npm run build:skill",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "immer": "^11.2.9",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.9.3",
+    "vite": "^6.4.5",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^3.2.7"
+  }
+}
