@@ -20,6 +20,8 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
+> **Current status (2026-11-01):** 33 of 35 backlog issues are done and merged. The remaining two, #35 (enable Pages) and #36 (tag v1.0.0 after a live install test), are **your decisions**; see § 5.
+
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
 | Milestone | Status | Issues |
@@ -27,8 +29,8 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M0 · Foundation** | ✅ | #2 brand · #3 runbook · #4 architecture · #5 hygiene · #6 scaffold · #7 CI |
 | **M1 · Core engine** | ✅ | #8 model · #9 validation · #10 bus matrix · #11 bubble · #12 req. doc · #13 CLI · #14 serve |
 | **M2 · Guided UI** | ✅ | #15 shell · #16 store/sync · #17 discover · #18 processes · #19 grain · #20 dimensions · #21 facts · #22 bubble UI · #23 matrix UI · #24 review · #25 coach · #26 examples · #27 single-file |
-| **M3 · Claude skill** | 🔄 | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
-| **M4 · Quality & release** | 🔄 | #33 e2e · #34 a11y · #35 Pages 🙋 · #36 release |
+| **M3 · Claude skill** | ✅ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
+| **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages 🙋 · #36 release 🙋 |
 
 ## 3. How work flows
 
@@ -122,13 +124,14 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
-| 2026-11-01 | PR: quality & release — Playwright e2e, axe a11y, Pages workflow (gated), release workflow, social preview PNG (#33–#36) | M4 PR |
-| 2026-11-01 | PR: Claude skill — SKILL.md, references, interview guide, plugin marketplace, evals (#28–#32) | skill PR |
+| 2026-11-01 | Owner actions posted on #35 (Pages) and #36 (v1.0.0); tracker #1 updated | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |
+| 2026-11-01 | Merged: quality & release — Playwright e2e, axe a11y (both themes), Pages workflow (gated), release workflow, social preview PNG (#33, #34; #35/#36 ready for owner) | [#42](https://github.com/kristinnthor/Kimball-designer/pull/42) |
+| 2026-11-01 | Merged: Claude skill — SKILL.md, references, interview guide, plugin marketplace, evals (#28–#32) | [#41](https://github.com/kristinnthor/Kimball-designer/pull/41) |
 | 2026-11-01 | Merged: guided UI — 10 phases, coach, bubble diagrams, bus matrix, review/export, live sync; core review fixes (#15–#27) | [#40](https://github.com/kristinnthor/Kimball-designer/pull/40) |
 | 2026-11-01 | Merged: `kimball` CLI and `kimball serve` live-sync server (#13, #14) | [#39](https://github.com/kristinnthor/Kimball-designer/pull/39) |
 | 2026-11-01 | Merged: core engine — model, JSON Schema, validation (16 rules), bus matrix, bubble diagrams, requirements doc, 3 example projects (#8–#12) | [#38](https://github.com/kristinnthor/Kimball-designer/pull/38) |
 | 2026-11-01 | Merged: toolchain scaffold + CI (#6, #7) | [#37](https://github.com/kristinnthor/Kimball-designer/pull/37) |
-| 2026-11-01 | Bootstrap: branding, runbook, architecture, ADRs, methodology, roadmap, templates | initial commit |
+| 2026-11-01 | Bootstrap: branding, runbook, architecture, ADRs, methodology, roadmap, templates (#2–#5) | [e46070f](https://github.com/kristinnthor/Kimball-designer/commit/e46070f) |
 | 2026-11-01 | Backlog created: 5 milestones, 35 issues, 18 labels; tracker pinned | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |
 
 ## 8. Resuming work (for the agent or a new contributor)
