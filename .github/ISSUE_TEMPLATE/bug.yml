@@ -1,0 +1,31 @@
+name: Bug
+description: Something doesn't work as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options: [Web UI, kimball CLI, kimball serve, Claude skill, Generated output]
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, browser, Node version, Claude app/CLI version

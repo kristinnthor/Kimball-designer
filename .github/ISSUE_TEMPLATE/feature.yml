@@ -1,0 +1,31 @@
+name: Feature
+description: Propose a new capability or improvement
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should Kimball Designer do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Which user problem does this solve? Which phase (Discover / Model / Deliver) does it touch?
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      value: |
+        - [ ]
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [core, ui, skill, brand, ci, process]

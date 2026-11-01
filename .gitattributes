@@ -1,0 +1,4 @@
+# Normalise line endings so built skill bundles are byte-identical on every OS.
+* text=auto eol=lf
+*.png binary
+*.zip binary

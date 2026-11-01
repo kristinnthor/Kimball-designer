@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-labelledby="t">
+<title id="t">Kimball Designer — from first interview to bus matrix</title>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0B1222"/><stop offset="1" stop-color="#14213D"/>
+  </linearGradient>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity="0.035"/>
+  </pattern>
+</defs>
+<rect width="1280" height="640" fill="url(#bg)"/>
+<rect width="1280" height="640" fill="url(#grid)"/>
+<g transform="translate(96 96) scale(2.25)">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#18243F" stroke="#26324F" stroke-width="1"/>
+  <g stroke="#A3B5FF" stroke-opacity="0.75" stroke-width="2.4" stroke-linecap="round">
+    <line x1="32" y1="32" x2="32" y2="11"/><line x1="32" y1="32" x2="52" y2="25.5"/>
+    <line x1="32" y1="32" x2="44.3" y2="49"/><line x1="32" y1="32" x2="19.7" y2="49"/>
+    <line x1="32" y1="32" x2="12" y2="25.5"/>
+  </g>
+  <g stroke="#18243F" stroke-width="1.6">
+    <circle cx="32" cy="11" r="5.2" fill="#FFC15E"/><circle cx="52" cy="25.5" r="5.2" fill="#7D95FF"/>
+    <circle cx="44.3" cy="49" r="5.2" fill="#7D95FF"/><circle cx="19.7" cy="49" r="5.2" fill="#7D95FF"/>
+    <circle cx="12" cy="25.5" r="5.2" fill="#7D95FF"/>
+  </g>
+  <circle cx="32" cy="32" r="9.5" fill="#2CC3BD" stroke="#18243F" stroke-width="1.6"/>
+  <circle cx="32" cy="32" r="5.2" fill="none" stroke="#0B1222" stroke-opacity="0.8" stroke-width="1.6"/></g>
+<text x="96" y="330" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="72" font-weight="800" fill="#E6EAF2" letter-spacing="-1.5">Kimball <tspan font-weight="400" fill="#B6C0D4">Designer</tspan></text>
+<text x="98" y="392" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="32" font-weight="600" fill="#2CC3BD">From first interview to bus matrix.</text>
+<text x="98" y="446" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="22" fill="#8A97B0">A Claude skill + guided UI for Kimball requirements gathering,</text>
+<text x="98" y="476" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="22" fill="#8A97B0">bubble diagrams and enterprise bus matrices.</text>
+<rect x="96" y="508" width="140" height="44" rx="22" fill="#2CC3BD" fill-opacity="0.14" stroke="#2CC3BD" stroke-opacity="0.6"/><text x="166" y="537" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#2CC3BD">Discover</text>
+<text x="252" y="537" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="22" fill="#5E6B88">→</text>
+<rect x="282" y="508" width="120" height="44" rx="22" fill="#7D95FF" fill-opacity="0.14" stroke="#7D95FF" stroke-opacity="0.6"/><text x="342" y="537" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#7D95FF">Model</text>
+<text x="418" y="537" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="22" fill="#5E6B88">→</text>
+<rect x="448" y="508" width="130" height="44" rx="22" fill="#FFC15E" fill-opacity="0.14" stroke="#FFC15E" stroke-opacity="0.6"/><text x="513" y="537" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#FFC15E">Deliver</text>
+<rect x="740" y="110" width="460" height="420" rx="24" fill="#121C33" stroke="#26324F"/>
+<rect x="842" y="136" width="36" height="8" rx="4" fill="#FFC15E" fill-opacity="0.8"/><rect x="898" y="136" width="36" height="8" rx="4" fill="#7D95FF" fill-opacity="0.8"/><rect x="954" y="136" width="36" height="8" rx="4" fill="#7D95FF" fill-opacity="0.8"/><rect x="1010" y="136" width="36" height="8" rx="4" fill="#FFC15E" fill-opacity="0.8"/><rect x="1066" y="136" width="36" height="8" rx="4" fill="#7D95FF" fill-opacity="0.8"/><rect x="1122" y="136" width="36" height="8" rx="4" fill="#7D95FF" fill-opacity="0.8"/><rect x="764" y="185" width="60" height="10" rx="5" fill="#2CC3BD" fill-opacity="0.85"/><line x1="764" x2="1176" y1="221" y2="221" stroke="#26324F"/><circle cx="860" cy="190" r="11" fill="#FFC15E"/><circle cx="916" cy="190" r="11" fill="#7D95FF"/><circle cx="972" cy="190" r="11" fill="#7D95FF"/><circle cx="1028" cy="190" r="11" fill="#FFC15E"/><circle cx="1084" cy="190" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1140" cy="190" r="11" fill="#7D95FF"/><rect x="764" y="247" width="60" height="10" rx="5" fill="#2CC3BD" fill-opacity="0.85"/><line x1="764" x2="1176" y1="283" y2="283" stroke="#26324F"/><circle cx="860" cy="252" r="11" fill="#FFC15E"/><circle cx="916" cy="252" r="11" fill="#7D95FF"/><circle cx="972" cy="252" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1028" cy="252" r="11" fill="#FFC15E"/><circle cx="1084" cy="252" r="11" fill="#7D95FF"/><circle cx="1140" cy="252" r="5" fill="none" stroke="#33405F" stroke-width="2"/><rect x="764" y="309" width="60" height="10" rx="5" fill="#2CC3BD" fill-opacity="0.85"/><line x1="764" x2="1176" y1="345" y2="345" stroke="#26324F"/><circle cx="860" cy="314" r="11" fill="#FFC15E"/><circle cx="916" cy="314" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="972" cy="314" r="11" fill="#7D95FF"/><circle cx="1028" cy="314" r="11" fill="#FFC15E"/><circle cx="1084" cy="314" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1140" cy="314" r="5" fill="none" stroke="#33405F" stroke-width="2"/><rect x="764" y="371" width="60" height="10" rx="5" fill="#2CC3BD" fill-opacity="0.85"/><line x1="764" x2="1176" y1="407" y2="407" stroke="#26324F"/><circle cx="860" cy="376" r="11" fill="#FFC15E"/><circle cx="916" cy="376" r="11" fill="#7D95FF"/><circle cx="972" cy="376" r="11" fill="#7D95FF"/><circle cx="1028" cy="376" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1084" cy="376" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1140" cy="376" r="11" fill="#7D95FF"/><rect x="764" y="433" width="60" height="10" rx="5" fill="#2CC3BD" fill-opacity="0.85"/><circle cx="860" cy="438" r="11" fill="#FFC15E"/><circle cx="916" cy="438" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="972" cy="438" r="5" fill="none" stroke="#33405F" stroke-width="2"/><circle cx="1028" cy="438" r="11" fill="#FFC15E"/><circle cx="1084" cy="438" r="11" fill="#7D95FF"/><circle cx="1140" cy="438" r="5" fill="none" stroke="#33405F" stroke-width="2"/>
+<text x="764" y="500" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="18" fill="#8A97B0">Enterprise bus matrix · <tspan fill="#FFC15E">conformed dimensions</tspan></text>
+</svg>

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Runbook & project status
+    url: https://github.com/kristinnthor/Kimball-designer/blob/main/docs/RUNBOOK.md
+    about: How work flows, what's in progress and how to monitor it.

@@ -1,0 +1,92 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-lockup-dark.svg">
+    <img src="brand/logo-lockup.svg" alt="Kimball Designer" width="420">
+  </picture>
+</p>
+
+<p align="center">
+  <strong>From first interview to bus matrix.</strong><br>
+  A Claude skill and a guided web UI that lead developers through Kimball business-requirements gathering<br>
+  and produce <b>bubble diagrams</b> and an <b>enterprise bus matrix</b>.
+</p>
+
+<p align="center">
+  <a href="https://github.com/kristinnthor/Kimball-designer/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kristinnthor/Kimball-designer/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-14213D"></a>
+  <a href="https://github.com/kristinnthor/Kimball-designer/issues/1"><img alt="Status" src="https://img.shields.io/badge/status-in%20development-F4A62A"></a>
+</p>
+
+---
+
+## Why
+
+Most dimensional models fail before the first table is created: the team never agreed on the **business processes**, the **grain**, or which **dimensions must be conformed**. Ralph Kimball's answer is a short, disciplined requirements process that ends in two artefacts everyone can read:
+
+| Artefact | What it shows |
+|---|---|
+| **Bubble diagram** (one per business process) | The process / fact table in the middle, the dimensions that describe it around it, the grain underneath. |
+| **Enterprise bus matrix** | Business processes (rows) × conformed dimensions (columns). The architecture plan for the whole warehouse. |
+
+Kimball Designer turns that process into a guided experience — in Claude, in your browser, or both at once.
+
+## How it works
+
+```
+ Discover                         Model                                         Deliver
+ ───────────────────────────      ──────────────────────────────────────────    ─────────────────────────────────
+ 1 Kickoff                         4 Business processes   6 Dimensions           8  Bubble diagrams
+ 2 Stakeholders & interviews       5 Grain                7 Facts & measures     9  Bus matrix
+ 3 Requirements                                                                  10 Review & export
+```
+
+- **Claude skill** — Claude interviews you phase by phase, asks a few focused questions at a time, records the answers in a `*.kimball.json` project file, validates the model against Kimball best practices and renders the deliverables.
+- **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file.
+- **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
+- **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
+
+## Quick start
+
+> 🚧 **In development.** Follow progress in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1). The commands below describe the v1.0 target.
+
+**Install the skill in Claude Code**
+
+```text
+/plugin marketplace add kristinnthor/Kimball-designer
+/plugin install kimball-designer@kimball-designer
+```
+
+Then ask Claude something like *"Help me gather requirements for a sales data warehouse and build a bus matrix."*
+
+**Or copy the skill manually** — copy `plugin/skills/kimball-designer/` into `~/.claude/skills/` (personal) or `.claude/skills/` (project).
+
+**Use the CLI directly** (Node ≥ 18, no install needed):
+
+```bash
+node plugin/skills/kimball-designer/scripts/kimball.mjs init kimball/project.kimball.json --example retail
+node plugin/skills/kimball-designer/scripts/kimball.mjs serve kimball/project.kimball.json
+node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.kimball.json --out kimball/out
+```
+
+## Repository layout
+
+| Path | What |
+|---|---|
+| [`plugin/skills/kimball-designer/`](plugin/skills/kimball-designer) | The Claude skill (SKILL.md, references, examples, bundled CLI and UI) |
+| [`src/core/`](src/core) | Shared engine: model, schema, validation, bus matrix, bubble layout, exporters |
+| [`src/app/`](src/app) | Guided web UI (React + TypeScript) |
+| [`src/cli/`](src/cli) | `kimball` CLI and local sync server |
+| [`brand/`](brand) | Logo, colours, typography, voice — see [BRAND.md](brand/BRAND.md) |
+| [`docs/`](docs) | [Runbook](docs/RUNBOOK.md), [architecture](docs/ARCHITECTURE.md), [decisions](docs/DECISIONS.md), [methodology](docs/METHODOLOGY.md), [roadmap](docs/ROADMAP.md) |
+
+## Project status
+
+Work is planned as GitHub issues grouped in five milestones and tracked in the pinned **[📋 delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1)**. How work flows, and how to monitor it, is described in the **[runbook](docs/RUNBOOK.md)**.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Licence and notice
+
+[MIT](LICENSE). Kimball Designer is an independent open-source project. It implements dimensional-modelling techniques popularised by Ralph Kimball and the Kimball Group and is not affiliated with or endorsed by them.

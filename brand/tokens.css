@@ -1,0 +1,129 @@
+/*
+ * Kimball Designer — design tokens.
+ * Source of truth for colours, type, radii and elevation. The web UI imports
+ * this file; the SVG exporters mirror the same values in src/core/theme.ts.
+ */
+:root {
+  /* Brand */
+  --kd-ink: #14213d;
+  --kd-ink-2: #3b4a6b;
+  --kd-muted: #5f6b85;
+  --kd-paper: #f7f8fb;
+  --kd-surface: #ffffff;
+  --kd-surface-2: #eef1f7;
+  --kd-line: #d9dfea;
+  --kd-line-strong: #b9c3d6;
+
+  /* Semantic modelling colours */
+  --kd-fact: #0e9f9a;          /* business process / fact table */
+  --kd-fact-strong: #0a7470;   /* text-safe on light surfaces */
+  --kd-fact-soft: #e3f6f5;
+  --kd-dim: #4c6fff;           /* dimension */
+  --kd-dim-strong: #3352d6;
+  --kd-dim-soft: #e8edff;
+  --kd-conformed: #f4a62a;     /* conformed dimension / bus matrix mark */
+  --kd-conformed-strong: #8f5300;
+  --kd-conformed-soft: #fff3dd;
+
+  /* Status */
+  --kd-success: #157a41;
+  --kd-success-soft: #e3f5ea;
+  --kd-warning: #b45309;
+  --kd-warning-soft: #fff4e0;
+  --kd-danger: #c62828;
+  --kd-danger-soft: #fde8e8;
+  --kd-info: var(--kd-dim-strong);
+  --kd-info-soft: var(--kd-dim-soft);
+
+  /* Type */
+  --kd-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --kd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --kd-text-xs: 0.75rem;
+  --kd-text-sm: 0.875rem;
+  --kd-text-md: 1rem;
+  --kd-text-lg: 1.25rem;
+  --kd-text-xl: 1.625rem;
+  --kd-text-2xl: 2.125rem;
+
+  /* Shape & depth */
+  --kd-radius-sm: 6px;
+  --kd-radius-md: 10px;
+  --kd-radius-lg: 16px;
+  --kd-radius-pill: 999px;
+  --kd-shadow-1: 0 1px 2px rgb(20 33 61 / 0.06), 0 1px 3px rgb(20 33 61 / 0.08);
+  --kd-shadow-2: 0 4px 12px rgb(20 33 61 / 0.08), 0 2px 4px rgb(20 33 61 / 0.06);
+  --kd-focus: 0 0 0 3px rgb(76 111 255 / 0.45);
+
+  /* Spacing scale (4px base) */
+  --kd-space-1: 4px;
+  --kd-space-2: 8px;
+  --kd-space-3: 12px;
+  --kd-space-4: 16px;
+  --kd-space-5: 24px;
+  --kd-space-6: 32px;
+  --kd-space-7: 48px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --kd-ink: #e6eaf2;
+    --kd-ink-2: #b6c0d4;
+    --kd-muted: #8a97b0;
+    --kd-paper: #0b1222;
+    --kd-surface: #121c33;
+    --kd-surface-2: #18243f;
+    --kd-line: #26324f;
+    --kd-line-strong: #3a4769;
+    --kd-fact: #2cc3bd;
+    --kd-fact-strong: #5fd9d4;
+    --kd-fact-soft: #0f3b3d;
+    --kd-dim: #7d95ff;
+    --kd-dim-strong: #a3b5ff;
+    --kd-dim-soft: #1d2a5c;
+    --kd-conformed: #ffc15e;
+    --kd-conformed-strong: #ffd48a;
+    --kd-conformed-soft: #3d2e12;
+    --kd-success: #4cc884;
+    --kd-success-soft: #123a26;
+    --kd-warning: #f0a54a;
+    --kd-warning-soft: #3a2a12;
+    --kd-danger: #ff7b7b;
+    --kd-danger-soft: #3d1a1d;
+    --kd-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --kd-shadow-2: 0 6px 16px rgb(0 0 0 / 0.45);
+    --kd-focus: 0 0 0 3px rgb(125 149 255 / 0.55);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --kd-ink: #e6eaf2;
+  --kd-ink-2: #b6c0d4;
+  --kd-muted: #8a97b0;
+  --kd-paper: #0b1222;
+  --kd-surface: #121c33;
+  --kd-surface-2: #18243f;
+  --kd-line: #26324f;
+  --kd-line-strong: #3a4769;
+  --kd-fact: #2cc3bd;
+  --kd-fact-strong: #5fd9d4;
+  --kd-fact-soft: #0f3b3d;
+  --kd-dim: #7d95ff;
+  --kd-dim-strong: #a3b5ff;
+  --kd-dim-soft: #1d2a5c;
+  --kd-conformed: #ffc15e;
+  --kd-conformed-strong: #ffd48a;
+  --kd-conformed-soft: #3d2e12;
+  --kd-success: #4cc884;
+  --kd-success-soft: #123a26;
+  --kd-warning: #f0a54a;
+  --kd-warning-soft: #3a2a12;
+  --kd-danger: #ff7b7b;
+  --kd-danger-soft: #3d1a1d;
+  --kd-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --kd-shadow-2: 0 6px 16px rgb(0 0 0 / 0.45);
+  --kd-focus: 0 0 0 3px rgb(125 149 255 / 0.55);
+  color-scheme: dark;
+}
