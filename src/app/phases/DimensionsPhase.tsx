@@ -6,12 +6,14 @@ import {
   displayName,
   isConformed,
   isConformedUsage,
+  isDateDimension,
   processesUsing,
   type DimensionKind,
 } from '../../core';
 import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
-import { EmptyState, RemoveButton, SectionHead, Select, TagInput, TextInput, ToggleChip } from '../components/ui';
+import { EmptyState, RemoveButton, SectionHead, Select, TagInput, TextArea, TextInput, ToggleChip } from '../components/ui';
+import { DIMENSION_DESCRIPTION_EXAMPLES, attributePlaceholder, hierarchyPlaceholder, pick, rolePlaceholder } from '../lib/placeholders';
 import { goToPhase } from '../store/routing';
 import { update, useProject } from '../store/store';
 
@@ -99,8 +101,10 @@ export function DimensionsPhase() {
                       onChange={(v) => update((d) => void (d.dimensions[i]!.name = v), { coalesce: `dm.${dim.id}.name` })}
                     />
                     <Select label="Kind" value={dim.kind} options={DIMENSION_KINDS} onChange={(v) => update((d) => void (d.dimensions[i]!.kind = v ?? 'standard'))} />
-                    <TextInput
+                    <TextArea
+                      rows={1}
                       label="Description"
+                      placeholder={pick(DIMENSION_DESCRIPTION_EXAMPLES, i)}
                       value={dim.description}
                       onChange={(v) => update((d) => void (d.dimensions[i]!.description = v), { coalesce: `dm.${dim.id}.desc` })}
                     />
@@ -129,6 +133,8 @@ export function DimensionsPhase() {
                                     <td>
                                       <TextInput
                                         aria-label="Attribute name"
+                                        placeholder={attributePlaceholder(dim.name, ai)}
+                                        autoFocus={!a.name}
                                         value={a.name}
                                         onChange={(v) => update((d) => void (d.dimensions[i]!.attributes[ai]!.name = v), { coalesce: `at.${a.id}` })}
                                       />
@@ -160,7 +166,7 @@ export function DimensionsPhase() {
                           label="Hierarchies"
                           values={dim.hierarchies}
                           onChange={(v) => update((d) => void (d.dimensions[i]!.hierarchies = v))}
-                          placeholder="e.g. Product → Brand → Category"
+                          placeholder={hierarchyPlaceholder(dim.name)}
                         />
                       </div>
                     </details>
@@ -232,7 +238,7 @@ export function DimensionsPhase() {
                           label={`${dim ? displayName(dim) : u.dimensionId} — roles (optional)`}
                           values={u.roles}
                           onChange={(v) => update((d) => void (d.processes[pi]!.dimensions[ui]!.roles = v))}
-                          placeholder={dim?.kind === 'date' ? 'e.g. Order date' : 'e.g. Bill-to'}
+                          placeholder={rolePlaceholder(dim ? isDateDimension(dim) : false, ui)}
                         />
                       );
                     })}

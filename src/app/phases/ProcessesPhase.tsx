@@ -2,7 +2,9 @@ import { createProcess, displayName, priorityScore } from '../../core';
 import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { PriorityGrid } from '../components/PriorityGrid';
+import { StakeholderInput } from '../components/StakeholderInput';
 import { EmptyState, RemoveButton, ScoreInput, SectionHead, TagInput, TextArea, TextInput, ToggleChip } from '../components/ui';
+import { PROCESS_DESCRIPTION_EXAMPLES, SOURCE_EXAMPLES, pick } from '../lib/placeholders';
 import { update, useProject } from '../store/store';
 
 const COMMON = ['Sales', 'Orders', 'Shipments', 'Inventory snapshot', 'Invoices', 'Payments', 'Returns', 'Web sessions', 'Support tickets'];
@@ -57,14 +59,14 @@ export function ProcessesPhase() {
                 <div className="stack">
                   <div className="grid-2">
                     <TextInput label="Name" value={p.name} onChange={set('name')} className="title" placeholder="e.g. Retail sales" autoFocus={!p.name} />
-                    <TextInput label="Business owner" value={p.owner} onChange={set('owner')} />
+                    <StakeholderInput label="Business owner" value={p.owner} onChange={set('owner')} />
                   </div>
-                  <TextArea label="Description" rows={2} value={p.description} onChange={set('description')} placeholder="What happens in this event?" />
+                  <TextArea label="Description" rows={2} value={p.description} onChange={set('description')} placeholder={pick(PROCESS_DESCRIPTION_EXAMPLES, i)} />
                   <TagInput
                     label="Source systems"
                     values={p.sourceSystems}
                     onChange={(v) => update((d) => void (d.processes[i]!.sourceSystems = v))}
-                    placeholder="e.g. POS, ERP"
+                    placeholder={pick(SOURCE_EXAMPLES, i)}
                   />
                   {project.requirements.length > 0 && (
                     <div className="field">

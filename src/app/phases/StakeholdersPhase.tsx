@@ -11,6 +11,7 @@ import {
 import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, RemoveButton, SectionHead, Segmented, Select, TextArea, TextInput } from '../components/ui';
+import { stakeholderDepartment, stakeholderRole } from '../lib/placeholders';
 import { update, useProject } from '../store/store';
 
 const TYPICAL: { role: string; type: StakeholderType }[] = [
@@ -50,6 +51,12 @@ export function StakeholdersPhase() {
           {project.stakeholders.map((s, i) => {
             const set = (key: 'name' | 'role' | 'department' | 'notes') => (v: string) =>
               update((d) => void (d.stakeholders[i]![key] = v), { coalesce: `sh.${s.id}.${key}` });
+            const sameName = (owner: string) => !!s.name.trim() && owner.trim().toLowerCase() === s.name.trim().toLowerCase();
+            const owns = [
+              ...project.processes.filter((p) => sameName(p.owner)).map((p) => displayName(p, 'Untitled process')),
+              ...(sameName(project.meta.sponsor) ? ['Sponsor'] : []),
+            ];
+            const questions = project.openQuestions.filter((q) => q.status === 'open' && sameName(q.owner)).length;
             return (
               <div className="card" key={s.id}>
                 <div className="card-head">
@@ -58,10 +65,16 @@ export function StakeholdersPhase() {
                   <RemoveButton label={`Remove ${displayName(s, 'stakeholder')}`} onClick={() => update((d) => void d.stakeholders.splice(i, 1))} />
                 </div>
                 <div className="grid-3">
-                  <TextInput label="Name" value={s.name} onChange={set('name')} autoFocus={!s.name && i === project.stakeholders.length - 1} />
-                  <TextInput label="Role" value={s.role} onChange={set('role')} />
-                  <TextInput label="Department" value={s.department} onChange={set('department')} />
+                  <TextInput label="Name" value={s.name} onChange={set('name')} placeholder="Full name" autoFocus={!s.name && i === project.stakeholders.length - 1} />
+                  <TextInput label="Role" value={s.role} onChange={set('role')} placeholder={stakeholderRole(s.type, i)} />
+                  <TextInput label="Department" value={s.department} onChange={set('department')} placeholder={stakeholderDepartment(s.type, i)} />
                 </div>
+                {(owns.length > 0 || questions > 0) && (
+                  <p className="hint" style={{ marginTop: 10 }}>
+                    {owns.length > 0 && <>Owns: {owns.join(', ')}. </>}
+                    {questions > 0 && <>{questions} open question{questions === 1 ? '' : 's'} to answer.</>}
+                  </p>
+                )}
                 <div className="row" style={{ marginTop: 16, gap: 24, alignItems: 'flex-end' }}>
                   <Select
                     label="Type"

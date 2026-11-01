@@ -1,7 +1,8 @@
 import { ADDITIVITY, createMeasure, displayName } from '../../core';
 import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
-import { EmptyState, RemoveButton, Select, TextInput } from '../components/ui';
+import { EmptyState, RemoveButton, Select, TextArea, TextInput } from '../components/ui';
+import { factPlaceholder } from '../lib/placeholders';
 import { goToPhase } from '../store/routing';
 import { update, useProject } from '../store/store';
 
@@ -63,10 +64,11 @@ export function FactsPhase() {
                             {p.facts.map((f, fi) => {
                               const set = (key: 'name' | 'unit' | 'description') => (v: string) =>
                                 update((d) => void (d.processes[pi]!.facts[fi]![key] = v), { coalesce: `ms.${f.id}.${key}` });
+                              const example = factPlaceholder(`${p.name} ${p.grain}`, fi);
                               return (
                                 <tr key={f.id}>
                                   <td>
-                                    <TextInput aria-label="Fact name" value={f.name} onChange={set('name')} placeholder="e.g. Sales amount" autoFocus={!f.name} />
+                                    <TextInput aria-label="Fact name" value={f.name} onChange={set('name')} placeholder={example.name} autoFocus={!f.name} />
                                   </td>
                                   <td>
                                     <Select
@@ -77,10 +79,10 @@ export function FactsPhase() {
                                     />
                                   </td>
                                   <td>
-                                    <TextInput aria-label="Unit" value={f.unit} onChange={set('unit')} placeholder="currency" />
+                                    <TextInput aria-label="Unit" value={f.unit} onChange={set('unit')} placeholder={example.unit} />
                                   </td>
                                   <td>
-                                    <TextInput aria-label="Description" value={f.description} onChange={set('description')} />
+                                    <TextArea rows={1} aria-label="Description" value={f.description} onChange={set('description')} placeholder="How it is measured" />
                                   </td>
                                   <td>
                                     <RemoveButton label="Remove fact" onClick={() => update((d) => void d.processes[pi]!.facts.splice(fi, 1))} />
