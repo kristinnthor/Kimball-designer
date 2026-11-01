@@ -27,6 +27,13 @@ All notable changes to this project are documented here. The format follows [Kee
 - Hosted UI at [kimball.kristinn.eu](https://kimball.kristinn.eu), deployed by the GitHub Pages workflow (gated on the `DEPLOY_PAGES` repository variable), with Open Graph tags for link previews (#35).
 - Release workflow (tag `v*` → GitHub release with the skill zip; manual dry run), `scripts/bump-version.mjs`, draft v1.0.0 release notes, and PNG renders of the brand assets (#36).
 
+- Help page in the UI (`#/help`, the **?** button): what the process delivers and why (outcomes, every deliverable with live samples, what comes next), the ten phases, ways to use it, CLI reference, saving and privacy, glossary, validation rules, shortcuts and FAQ (#45).
+- Guided demos with a step-by-step demo bar that ticks off steps as you do them: tour a finished model, model your first business process, share the results, work with Claude (#46).
+- User guide (`docs/USER-GUIDE.md`) and skill reference (`references/user-guide.md`) generated from the same help content by `npm run build:docs`; a test fails if they are stale (#47).
+
+### Changed
+- The coach panel button now uses a lightbulb icon; **?** opens Help.
+
 ### Fixed
 - Pluralisation in phase details ("business processes").
 - Review feedback on the core engine (wrapping, CSV formula injection, Markdown HTML escaping, id sanitising, duplicate roles, review status, blank scores). Degenerate dimensions are no longer counted as conformed.

@@ -9,6 +9,7 @@ flowchart LR
   M1 --> M3[M3 · Claude skill<br/>SKILL.md · references · plugin]
   M2 --> M4[M4 · Quality & release<br/>e2e · a11y · Pages · v1.0.0]
   M3 --> M4
+  M4 --> M5[M5 · Help & onboarding<br/>help page · demos · user guide]
 ```
 
 ## M0 · Foundation
@@ -25,6 +26,9 @@ SKILL.md workflow (#28), references (#29), interview question bank (#30), plugin
 
 ## M4 · Quality & release
 Playwright e2e (#33), accessibility (#34), hosted UI on GitHub Pages at kimball.kristinn.eu (#35), v1.0.0 release (#36).
+
+## M5 · Help & onboarding
+In-app Help page that explains what the process delivers (#45), guided demos with a step-by-step demo bar (#46), and a user guide generated from the same content for GitHub and the skill (#47).
 
 ## After v1.0 (ideas, not scheduled)
 - Detailed design phase: attribute-level dimension design, SCD strategy per attribute, source-to-target mapping.

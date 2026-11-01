@@ -2,11 +2,13 @@ import { EXAMPLES } from '../../core';
 import { closeProject, exportProjectJson, newProject, openProjectFile, startFromExample } from '../actions';
 import { setThemePref, useThemePref, type ThemePref } from '../lib/theme';
 import { store, update, useProject, useStore } from '../store/store';
+import { helpHref } from '../store/routing';
 import { keepBrowserVersion, keepDiskVersion, useSyncStatus } from '../store/sync';
 import {
   IconCoach,
   IconDownload,
   IconFile,
+  IconHelp,
   IconMenu,
   IconMonitor,
   IconMoon,
@@ -22,12 +24,26 @@ import { Menu } from './ui';
 
 const THEME_NEXT: Record<ThemePref, ThemePref> = { system: 'light', light: 'dark', dark: 'system' };
 
+export function ThemeToggle() {
+  const theme = useThemePref();
+  return (
+    <button
+      type="button"
+      className="btn ghost icon"
+      aria-label={`Theme: ${theme}. Switch to ${THEME_NEXT[theme]}`}
+      title={`Theme: ${theme}`}
+      onClick={() => setThemePref(THEME_NEXT[theme])}
+    >
+      {theme === 'dark' ? <IconMoon /> : theme === 'light' ? <IconSun /> : <IconMonitor />}
+    </button>
+  );
+}
+
 export function Header({ onToggleCoach, coachOpen }: { onToggleCoach: () => void; coachOpen: boolean }) {
   const project = useProject();
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const sync = useSyncStatus();
-  const theme = useThemePref();
   const server = sync.mode === 'server';
 
   const syncLabel =
@@ -106,15 +122,7 @@ export function Header({ onToggleCoach, coachOpen }: { onToggleCoach: () => void
               </>
             )}
           </Menu>
-          <button
-            type="button"
-            className="btn ghost icon"
-            aria-label={`Theme: ${theme}. Switch to ${THEME_NEXT[theme]}`}
-            title={`Theme: ${theme}`}
-            onClick={() => setThemePref(THEME_NEXT[theme])}
-          >
-            {theme === 'dark' ? <IconMoon /> : theme === 'light' ? <IconSun /> : <IconMonitor />}
-          </button>
+          <ThemeToggle />
           <button
             type="button"
             className="btn ghost icon"
@@ -125,6 +133,9 @@ export function Header({ onToggleCoach, coachOpen }: { onToggleCoach: () => void
           >
             <IconCoach />
           </button>
+          <a className="btn ghost icon" href={helpHref()} aria-label="Help and demos" title="Help and demos">
+            <IconHelp />
+          </a>
         </div>
       </header>
       {sync.state === 'conflict' && (

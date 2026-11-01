@@ -1,5 +1,6 @@
 import { GUIDANCE, phaseDef, type PhaseId } from '../../core';
 import { useFindings, usePhaseStatuses } from '../store/derived';
+import { helpHref } from '../store/routing';
 import { IconClose } from './icons';
 
 export function CoachPanel({ phase, onClose }: { phase: PhaseId; onClose: () => void }) {
@@ -90,6 +91,10 @@ export function CoachPanel({ phase, onClose }: { phase: PhaseId; onClose: () => 
             </ul>
           </section>
         )}
+
+        <section>
+          <a href={helpHref('phases')}>All ten phases, demos and deliverables in Help →</a>
+        </section>
       </div>
     </aside>
   );

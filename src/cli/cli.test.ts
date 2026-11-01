@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { HELP_CLI } from '../core';
 import { runCli, type CliIO } from './cli';
 
 let dir: string;
@@ -32,6 +33,15 @@ describe('kimball CLI', () => {
     stdout = '';
     expect(await run('--version')).toBe(0);
     expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('documents every command and flag the help page lists', async () => {
+    expect(await run('--help')).toBe(0);
+    for (const { command } of HELP_CLI) {
+      const [name, ...rest] = command.split(' ');
+      expect(stdout).toMatch(new RegExp(`^  ${name}\\b`, 'm'));
+      for (const flag of rest.filter((w) => w.startsWith('--'))) expect(stdout).toContain(flag);
+    }
   });
 
   it('init creates the default file and refuses to overwrite', async () => {

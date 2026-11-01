@@ -19,7 +19,11 @@ for (const scheme of ['light', 'dark'] as const) {
     };
 
     await scan('welcome');
-    await page.getByRole('button', { name: /Retail sales & inventory/ }).click();
+    await page.getByRole('link', { name: /Help, demos and what you get/ }).click();
+    await scan('help');
+    // The tour loads the Retail example, so every phase below is scanned with the demo bar showing.
+    await page.getByRole('button', { name: 'Start demo: Tour a finished model' }).click();
+    await expect(page.getByRole('region', { name: /^Demo:/ })).toBeVisible();
     for (const id of PHASES) {
       await goToPhase(page, id);
       await scan(id);

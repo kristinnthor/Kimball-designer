@@ -105,3 +105,4 @@ If `node` isn't available: edit the project file directly following `schema/kimb
 | `references/kimball-primer.md` | Explaining concepts; understanding validation rules |
 | `references/schema-guide.md` | Editing the project file |
 | `references/deliverables.md` | Presenting results; working without Node |
+| `references/user-guide.md` | The user asks how to use Kimball Designer (UI, demos, CLI, saving) or what the process delivers to them |
