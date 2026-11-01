@@ -58,7 +58,7 @@ node ~/.claude/skills/kimball-designer/scripts/kimball.mjs serve demo.kimball.js
 
 - **Offline:** open `plugin/skills/kimball-designer/ui/index.html` in a browser. Projects autosave in the browser; use *Project → Export* to save a `.kimball.json` file.
 - **With a file on disk:** `kimball serve <file>` opens the UI on that file with live sync.
-- **Hosted:** if the owner enables GitHub Pages (#35), the same UI is available online.
+- **Hosted:** the same UI runs at [kimball.kristinn.eu](https://kimball.kristinn.eu). It has no backend: projects stay in your browser, and you import and export `.kimball.json` files as with the offline file.
 
 ## Uninstall
 

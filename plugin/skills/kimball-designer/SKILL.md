@@ -94,7 +94,7 @@ Templates for this message are in `references/deliverables.md`.
 
 ## Without Node
 
-If `node` isn't available: edit the project file directly following `schema/kimball-project.schema.json`, check the rules in `references/kimball-primer.md` yourself, and write the bus matrix as a Markdown table and each bubble diagram as a Mermaid `mindmap` using the formats in `references/deliverables.md`. The UI still works by opening `ui/index.html` in a browser and importing/exporting the project file.
+If `node` isn't available: edit the project file directly following `schema/kimball-project.schema.json`, check the rules in `references/kimball-primer.md` yourself, and write the bus matrix as a Markdown table and each bubble diagram as a Mermaid `mindmap` using the formats in `references/deliverables.md`. The UI still works by opening `ui/index.html` in a browser, or https://kimball.kristinn.eu, and importing/exporting the project file.
 
 ## Reference files
 

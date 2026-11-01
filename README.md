@@ -12,6 +12,7 @@
 </p>
 
 <p align="center">
+  <a href="https://kimball.kristinn.eu"><img alt="Try it online" src="https://img.shields.io/badge/try%20it-kimball.kristinn.eu-0E9F9A"></a>
   <a href="https://github.com/kristinnthor/Kimball-designer/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kristinnthor/Kimball-designer/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-14213D"></a>
   <a href="https://github.com/kristinnthor/Kimball-designer/issues/1"><img alt="Status" src="https://img.shields.io/badge/status-in%20development-F4A62A"></a>
@@ -41,7 +42,7 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 ```
 
 - **Claude skill** — Claude interviews you phase by phase, asks a few focused questions at a time, records the answers in a `*.kimball.json` project file, validates the model against Kimball best practices and renders the deliverables.
-- **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file.
+- **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file, or online at [kimball.kristinn.eu](https://kimball.kristinn.eu).
 - **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
 - **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
 
@@ -56,6 +57,8 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 ## Quick start
 
 > 🚧 **Pre-release.** Everything below works on `main`; follow the road to v1.0 in the [delivery tracker](https://github.com/kristinnthor/Kimball-designer/issues/1).
+
+**Try it in your browser:** [kimball.kristinn.eu](https://kimball.kristinn.eu). Nothing to install. Your project stays in your browser until you export it.
 
 **Install the skill in Claude Code**
 
