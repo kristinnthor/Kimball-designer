@@ -217,6 +217,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     usedBy: 'Data engineers starting the build, and the business users who want to see how their questions will be answered.',
     why: 'Problems with the grain or missing dimensions show up in minutes with rows in front of you, instead of after the first load job.',
     where: 'Phase 11 *Prototype*, or `kimball prototype` and `kimball ddl` from the CLI. Claude can suggest realistic sample values for your attributes.',
+    image: { src: 'images/ui-prototype.jpg', alt: 'The Prototype phase: net sales grouped by product category over sample data, with the SQL' },
   },
   {
     id: 'handoff',

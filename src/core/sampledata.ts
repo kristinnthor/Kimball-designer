@@ -137,6 +137,8 @@ const POOLS: [RegExp, string[]][] = [
   [/\bregion|district|territory|area\b/i, ['North', 'South', 'East', 'West', 'Central']],
   [/\bsegment\b/i, ['Consumer', 'Small business', 'Mid-market', 'Enterprise']],
   [/\bstatus\b/i, ['Active', 'Inactive', 'Pending', 'Closed']],
+  // Before "band": an age band is ages, not tiers.
+  [/\bage\b/i, ['18–24', '25–34', '35–44', '45–54', '55–64', '65+']],
   [/\btier|level|band\b/i, ['Gold', 'Silver', 'Bronze']],
   [/\bchannel\b/i, ['Store', 'Online', 'Mobile app', 'Partner', 'Phone']],
   [/\bcolou?r\b/i, ['Black', 'White', 'Red', 'Blue', 'Green', 'Grey']],
@@ -147,7 +149,6 @@ const POOLS: [RegExp, string[]][] = [
   [/\bdepartment|division|team|unit\b/i, ['Fresh', 'Ambient', 'Non-food', 'Electronics', 'Home']],
   [/\bformat\b/i, ['Hypermarket', 'Supermarket', 'Convenience', 'Online']],
   [/\bindustry|sector\b/i, ['Retail', 'Manufacturing', 'Healthcare', 'Finance', 'Education', 'Technology', 'Logistics']],
-  [/\bage\b/i, ['18–24', '25–34', '35–44', '45–54', '55–64', '65+']],
   [/\bjob|title|role|position|specialty\b/i, ['Cashier', 'Store manager', 'Shift lead', 'Stock clerk', 'Sales associate']],
   [/\bcurrency\b/i, ['EUR', 'USD', 'ISK', 'GBP', 'DKK']],
   [/\bcarrier|courier\b/i, ['Póstur', 'DHL', 'UPS', 'FedEx', 'Local courier']],
@@ -336,6 +337,58 @@ export function defaultRows(table: PhysicalTable): number {
   return 25;
 }
 
+/** The values a junk-dimension column takes: its sample values, yes/no, a word pool, or a few codes. */
+function junkValues(col: PhysicalColumn, table: PhysicalTable, rng: Rng): Cell[] {
+  const attribute = col.source.kind === 'attribute' ? col.source.attribute : undefined;
+  if (attribute?.sampleValues?.length) return [...new Set(attribute.sampleValues.map((v) => typed(v, col.dataType)))];
+  if (col.dataType === 'boolean') return [false, true];
+  if (col.dataType === 'integer' || col.dataType === 'decimal') return [1, 2, 3, 4, 5];
+  if (col.dataType === 'date') return ['2025-01-01', '2025-07-01'];
+  const pool = poolFor(attribute?.name ?? col.name);
+  if (pool) return pool.slice(0, 6);
+  return [...new Set(Array.from({ length: 5 }, (_, i) => attributeValue(col, table, i, rng, i)))];
+}
+
+/**
+ * A junk dimension holds each combination of its flags and codes once (its
+ * unique index enforces that), so rows are distinct combinations in random order.
+ */
+function junkTable(table: PhysicalTable, settings: PhysicalSettings): DimData {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const attrs = table.columns.filter((c) => c.role === 'attribute');
+  const domains = attrs.map((c) => junkValues(c, table, rng));
+  const combinations = domains.reduce((n, d) => n * Math.max(1, d.length), 1);
+  const n = Math.min(rowCount(table, settings), combinations);
+  // Pick n distinct combination numbers, then decode each into one value per column (mixed radix).
+  const picked = new Set<number>();
+  if (combinations <= 5000) {
+    const all = Array.from({ length: combinations }, (_, i) => i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [all[i], all[j]] = [all[j]!, all[i]!];
+    }
+    all.slice(0, n).forEach((i) => picked.add(i));
+  } else {
+    while (picked.size < n) picked.add(Math.floor(rng() * combinations));
+  }
+  const rows: Cell[][] = [];
+  let key = 0;
+  for (let combo of picked) {
+    key += 1;
+    const values = new Map<string, Cell>();
+    attrs.forEach((c, i) => {
+      const d = domains[i]!;
+      values.set(c.name, d.length ? d[combo % d.length]! : null);
+      combo = Math.floor(combo / Math.max(1, d.length));
+    });
+    rows.push(table.columns.map((c) => (c.role === 'surrogate-key' ? key : (values.get(c.name) ?? null))));
+  }
+  return {
+    table: { name: table.name, columns: table.columns.map((c) => c.name), rows },
+    members: rows.map((r) => [{ key: r[0] as number, from: '0000-01-01', to: FAR_FUTURE }]),
+  };
+}
+
 export function rowCount(table: PhysicalTable, settings: PhysicalSettings): number {
   return settings.rows[table.sourceId] ?? defaultRows(table);
 }
@@ -448,6 +501,8 @@ function measureValue(col: PhysicalColumn, rng: Rng, quantity: number, price: nu
     if (/count|events|views|clicks|sessions/.test(name)) return int(rng, 0, 50);
     return int(rng, 1, 20);
   }
+  // A change (MRR change, price change) goes both ways; check it before balances and levels.
+  if (/change|delta|difference/.test(name)) return round((rng() < 0.3 ? -1 : 1) * (10 + rng() * 300), 2);
   if (semi || /balance|mrr|premium|value at|on hand/.test(name)) return round(200 + rng() * 20_000, 2);
   const base = quantity * price;
   const share = (lo: number, hi: number) => round(base * (lo + rng() * (hi - lo)), 2);
@@ -459,7 +514,6 @@ function measureValue(col: PhysicalColumn, rng: Rng, quantity: number, price: nu
   if (/allowed/.test(name)) return share(0.7, 0.95);
   if (/paid/.test(name)) return share(0.5, 0.85);
   if (/responsibility|copay|deductible/.test(name)) return share(0.05, 0.2);
-  if (/change/.test(name)) return round((rng() < 0.3 ? -1 : 1) * (10 + rng() * 300), 2);
   return round(base, 2);
 }
 
@@ -507,7 +561,7 @@ export function generateSampleData(project: KimballProject, model: PhysicalModel
   const dates = sampleDates(settings);
   const dims = new Map<string, DimData>();
   for (const t of model.tables.filter((x) => x.kind === 'dimension')) {
-    dims.set(t.name, t.calendar ? calendarTable(t, dates) : memberTable(t, project, settings, dates));
+    dims.set(t.name, t.calendar ? calendarTable(t, dates) : t.junk ? junkTable(t, settings) : memberTable(t, project, settings, dates));
   }
   const tables: Record<string, SampleTable> = {};
   for (const [name, d] of dims) tables[name] = d.table;

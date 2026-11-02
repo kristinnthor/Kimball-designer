@@ -21,7 +21,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
-> **Current status (2026-11-01):** M0–M3 and M5 are done, and the hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu) with a full Help page and guided demos (#45–#47). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
+> **Current status (2026-11-02):** M0–M3, M5 and M6 are done. M6 (owner requests) adds phase 11 *Prototype*: sample data to explore, CREATE TABLE scripts with index advice, and a Docker sandbox (#52, #53); plus readable open questions (#49), varied example text (#50), stakeholders as owners (#51) and fixes from a full product review (#54). The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
 
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
@@ -33,6 +33,7 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M3 · Claude skill** | ✅ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
 | **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages ✅ · #36 release 🙋 |
 | **M5 · Help & onboarding** | ✅ | #45 help page · #46 guided demos · #47 user guide |
+| **M6 · Prototype & review** | ✅ | #49 open questions · #50 example text · #51 stakeholders as owners · #52 prototype · #53 DDL & index advice · #54 review fixes |
 
 ## 3. How work flows
 
@@ -131,6 +132,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-02 | Prototype & review (owner request): phase 11 *Prototype* with sample data, explorer, CREATE TABLE scripts for PostgreSQL/SQL Server/Snowflake with index advice, Docker sandbox, `kimball ddl`/`prototype`; readable open questions, varied examples, stakeholders as owners; fixes from a full review of core, CLI and UI (#49–#54) | [#55](https://github.com/kristinnthor/Kimball-designer/pull/55) |
 | 2026-11-01 | Help & onboarding (owner request): Help page explaining what the process delivers, guided demos with a demo bar, user guide generated for GitHub and the skill (#45–#47) | [#48](https://github.com/kristinnthor/Kimball-designer/pull/48) |
 | 2026-11-01 | Hosted UI live at kimball.kristinn.eu (#35): owner set the custom domain and uploaded the social preview; Pages source switched to GitHub Actions, `DEPLOY_PAGES=true`, Open Graph tags, no `kimball serve` probe off localhost | [#44](https://github.com/kristinnthor/Kimball-designer/pull/44) |
 | 2026-11-01 | Owner actions posted on #35 (Pages) and #36 (v1.0.0); tracker #1 updated | [#1](https://github.com/kristinnthor/Kimball-designer/issues/1) |

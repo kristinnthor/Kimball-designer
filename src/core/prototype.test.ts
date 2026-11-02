@@ -89,6 +89,18 @@ describe('physicalModel', () => {
     expect(t.columns.map((c) => c.name)).toContain('customer_group_2');
   });
 
+  it('avoids words reserved in SQL Server and Snowflake', () => {
+    const p = createProject('T');
+    p.dimensions.push(
+      createDimension({
+        name: 'Claim line',
+        attributes: ['Procedure', 'Account', 'Transaction', 'Schema'].map((name, i) => ({ id: `a${i}`, name, description: '', scdType: null })),
+      }),
+    );
+    const names = physicalModel(p).tables[0]!.columns.map((c) => c.name);
+    expect(names).toEqual(expect.arrayContaining(['claim_line_procedure', 'claim_line_account', 'claim_line_transaction', 'claim_line_schema']));
+  });
+
   it('infers measure types from name and unit', () => {
     expect(inferMeasureType(createMeasure({ name: 'Sales quantity', unit: 'units' })).dataType).toBe('integer');
     expect(inferMeasureType(createMeasure({ name: 'Net sales amount', unit: 'currency' }))).toMatchObject({ dataType: 'decimal', scale: 2 });
@@ -190,6 +202,25 @@ describe('generateSampleData', () => {
     for (const r of t.rows) if (r[current]) byKey.set(String(r[bk]), (byKey.get(String(r[bk])) ?? 0) + 1);
     expect([...byKey.values()].every((n) => n === 1)).toBe(true);
     expect(t.rows.length).toBeGreaterThan(byKey.size);
+  });
+
+  it('gives a junk dimension distinct combinations, so its unique index holds', () => {
+    const data = generateSampleData(saas());
+    const t = data.tables.dim_change_profile!;
+    const combos = t.rows.map((r) => JSON.stringify(r.slice(1)));
+    expect(new Set(combos).size).toBe(combos.length);
+    expect(combos.length).toBeGreaterThan(5);
+  });
+
+  it('generates plausible values: age bands are ages, changes go both ways', () => {
+    const health = generateSampleData(loadExample('healthcare', '2026-01-01T00:00:00.000Z'));
+    const member = health.tables.dim_member!;
+    const ages = new Set(member.rows.map((r) => r[member.columns.indexOf('age_band')]));
+    expect([...ages].every((a) => /\d/.test(String(a)))).toBe(true);
+    const changes = generateSampleData(saas()).tables.fact_subscription_changes!;
+    const mrr = changes.rows.map((r) => Number(r[changes.columns.indexOf('mrr_change')]));
+    expect(mrr.some((v) => v < 0)).toBe(true);
+    expect(Math.max(...mrr)).toBeLessThan(1000);
   });
 
   it('uses sample values from the design', () => {

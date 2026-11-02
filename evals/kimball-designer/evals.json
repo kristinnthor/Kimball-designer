@@ -90,6 +90,18 @@
         "Produces a Mermaid mindmap with the process as root and dimensions as children, and states the grain beneath it",
         "Offers to record the result in a project file following the schema"
       ]
+    },
+    {
+      "id": "prototype",
+      "prompt": "Our Kimball design is agreed. I want to see how it works with data before we build: make a container with the dimensions and facts filled with test data, and give me the CREATE TABLE script for SQL Server with index recommendations.",
+      "files": ["fixtures/half-done.kimball.json"],
+      "expectations": [
+        "Runs `kimball summary` first and points out any process that is not ready to build (missing grain, dimensions or facts) instead of ignoring it",
+        "Proposes realistic sample values, business keys or data types for the attributes, labels them as suggestions, and records only what the user accepts",
+        "Runs `kimball prototype --dialect sqlserver` or `kimball ddl --dialect sqlserver` rather than writing the DDL by hand",
+        "Explains how to start the sandbox (`docker compose up -d`) and says the rows are made-up sample data, not real data",
+        "Hands over schema.sql and summarises the main index recommendations with their reasons (e.g. a clustered columnstore per fact table, unique business keys)"
+      ]
     }
   ]
 }

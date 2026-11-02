@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { goToPhase, UI_FILE_URL } from './helpers';
 
-const PHASES = ['kickoff', 'stakeholders', 'requirements', 'processes', 'grain', 'dimensions', 'facts', 'bubbles', 'matrix', 'review'];
+const PHASES = ['kickoff', 'stakeholders', 'requirements', 'processes', 'grain', 'dimensions', 'facts', 'bubbles', 'matrix', 'review', 'prototype'];
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`no serious accessibility violations in any phase (${scheme})`, async ({ page }) => {

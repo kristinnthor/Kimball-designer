@@ -85,7 +85,7 @@ function physicalAttributeFields(o: Obj): Pick<DimensionAttribute, 'dataType' | 
   const dataType = nullableOneOf(o.dataType, DATA_TYPES);
   if (dataType) out.dataType = dataType;
   if (o.businessKey === true) out.businessKey = true;
-  const samples = strList(o.sampleValues).slice(0, 500);
+  const samples = [...new Set(strList(o.sampleValues))].slice(0, 500);
   if (samples.length) out.sampleValues = samples;
   return out;
 }

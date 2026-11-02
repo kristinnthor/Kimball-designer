@@ -24,7 +24,8 @@ var PHASE_IDS = [
   "facts",
   "bubbles",
   "matrix",
-  "review"
+  "review",
+  "prototype"
 ];
 var STAKEHOLDER_TYPES = [
   { value: "executive", label: "Executive", description: "Sets direction and success measures; sponsors the program." },
@@ -89,6 +90,11 @@ var DIMENSION_KINDS = [
   },
   { value: "junk", label: "Junk", description: "A grouping of low-cardinality flags and indicators." }
 ];
+var SQL_DIALECTS = [
+  { value: "postgres", label: "PostgreSQL", description: "PostgreSQL 13 or later. Also used by the Docker sandbox." },
+  { value: "sqlserver", label: "SQL Server", description: "SQL Server 2016 or later, or Azure SQL." },
+  { value: "snowflake", label: "Snowflake", description: "Snowflake. Constraints are informational; no indexes." }
+];
 var SCD_TYPES = [
   { value: 0, label: "Type 0", description: "Retain original value; never changes." },
   { value: 1, label: "Type 1", description: "Overwrite; no history kept." },
@@ -139,6 +145,15 @@ function createProject(name = "", now = (/* @__PURE__ */ new Date()).toISOString
     openQuestions: []
   };
 }
+var SAMPLE_ROWS_MAX = 1e5;
+function defaultPhysicalSettings(createdAt) {
+  const created = Number(createdAt.slice(0, 4));
+  const year = Number.isInteger(created) && created > 1900 ? created - 1 : 2025;
+  return { dialect: "postgres", seed: 1, dateFrom: `${year}-01-01`, dateTo: `${year}-12-31`, rows: {} };
+}
+function physicalSettings(project) {
+  return project.physical ?? defaultPhysicalSettings(project.meta.createdAt);
+}
 function processesUsing(project, dimensionId) {
   return project.processes.filter((p) => p.dimensions.some((u) => u.dimensionId === dimensionId));
 }
@@ -163,7 +178,8 @@ var ProjectParseError = class extends Error {
   }
 };
 var isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-var str = (v) => typeof v === "string" ? v : typeof v === "number" ? String(v) : "";
+var CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+var str = (v) => typeof v === "string" ? v.replace(CONTROL, "") : typeof v === "number" ? String(v) : "";
 var strList = (v) => Array.isArray(v) ? v.map(str).filter((s) => s.trim() !== "") : typeof v === "string" && v.trim() ? [v] : [];
 var list = (v) => Array.isArray(v) ? v.filter(isObj) : [];
 var oneOf = (v, allowed, fallback) => allowed.includes(v) ? v : fallback;
@@ -186,6 +202,45 @@ var FACT_TYPES = [
 ];
 var ADDITIVITY2 = ["additive", "semi-additive", "non-additive"];
 var DIM_KINDS = ["standard", "date", "degenerate", "junk"];
+var DATA_TYPES = ["text", "integer", "decimal", "date", "boolean"];
+var DIALECTS = ["postgres", "sqlserver", "snowflake"];
+var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+var isoDate = (v) => {
+  const s = str(v).trim();
+  return ISO_DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && (/* @__PURE__ */ new Date(`${s}T00:00:00Z`)).toISOString().startsWith(s) ? s : null;
+};
+function physicalAttributeFields(o) {
+  const out = {};
+  const dataType = nullableOneOf(o.dataType, DATA_TYPES);
+  if (dataType) out.dataType = dataType;
+  if (o.businessKey === true) out.businessKey = true;
+  const samples = [...new Set(strList(o.sampleValues))].slice(0, 500);
+  if (samples.length) out.sampleValues = samples;
+  return out;
+}
+function sampleRange(v) {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const [a, b] = v.map((x) => typeof x === "string" && x.trim() ? Number(x) : x);
+  if (typeof a !== "number" || typeof b !== "number" || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return a <= b ? [a, b] : [b, a];
+}
+function normalizePhysical(v, createdAt) {
+  if (!isObj(v)) return void 0;
+  const defaults = defaultPhysicalSettings(createdAt);
+  const seed = typeof v.seed === "number" && Number.isFinite(v.seed) ? Math.abs(Math.trunc(v.seed)) % 2 ** 31 : defaults.seed;
+  let dateFrom = isoDate(v.dateFrom) ?? defaults.dateFrom;
+  let dateTo = isoDate(v.dateTo) ?? defaults.dateTo;
+  if (dateFrom > dateTo) [dateFrom, dateTo] = [dateTo, dateFrom];
+  const rows = {};
+  if (isObj(v.rows)) {
+    for (const [key, n] of Object.entries(v.rows)) {
+      const k = safeId(key);
+      const count = typeof n === "string" && n.trim() ? Number(n) : n;
+      if (k && typeof count === "number" && Number.isFinite(count) && count >= 1) rows[k] = Math.min(SAMPLE_ROWS_MAX, Math.round(count));
+    }
+  }
+  return { dialect: oneOf(v.dialect, DIALECTS, "postgres"), seed, dateFrom, dateTo, rows };
+}
 function normalizeStakeholder(o) {
   return {
     id: id(o.id, ID_PREFIX.stakeholder),
@@ -209,13 +264,18 @@ function normalizeRequirement(o) {
   };
 }
 function normalizeMeasure(o) {
-  return {
+  const measure = {
     id: id(o.id, ID_PREFIX.measure),
     name: str(o.name),
     description: str(o.description),
     additivity: oneOf(o.additivity, ADDITIVITY2, "additive"),
     unit: str(o.unit)
   };
+  const dataType = nullableOneOf(o.dataType, ["integer", "decimal"]);
+  if (dataType) measure.dataType = dataType;
+  const range = sampleRange(o.sampleRange);
+  if (range) measure.sampleRange = range;
+  return measure;
 }
 function normalizeUsage(v) {
   if (typeof v === "string" && safeId(v)) return { dimensionId: safeId(v), roles: [] };
@@ -242,7 +302,7 @@ function normalizeAttribute(v) {
   if (typeof v === "string" && v.trim()) return { id: newId(ID_PREFIX.attribute), name: v.trim(), description: "", scdType: null };
   if (!isObj(v)) return null;
   const scd = typeof v.scdType === "number" && [0, 1, 2, 3].includes(v.scdType) ? v.scdType : null;
-  return { id: id(v.id, ID_PREFIX.attribute), name: str(v.name), description: str(v.description), scdType: scd };
+  return { id: id(v.id, ID_PREFIX.attribute), name: str(v.name), description: str(v.description), scdType: scd, ...physicalAttributeFields(v) };
 }
 function normalizeDimension(o) {
   return {
@@ -277,7 +337,9 @@ function normalizeProject(input, now = (/* @__PURE__ */ new Date()).toISOString(
     );
   }
   const meta = isObj(input.meta) ? input.meta : {};
-  return {
+  const createdAt = str(meta.createdAt) || now;
+  const physical = normalizePhysical(input.physical, createdAt);
+  const project = {
     $schema: SCHEMA_URL,
     schemaVersion: SCHEMA_VERSION,
     meta: {
@@ -289,7 +351,7 @@ function normalizeProject(input, now = (/* @__PURE__ */ new Date()).toISOString(
       scopeOut: str(meta.scopeOut),
       successCriteria: strList(meta.successCriteria),
       currentPhase: oneOf(meta.currentPhase, PHASE_IDS, "kickoff"),
-      createdAt: str(meta.createdAt) || now,
+      createdAt,
       updatedAt: str(meta.updatedAt) || now
     },
     stakeholders: list(input.stakeholders).map(normalizeStakeholder),
@@ -299,6 +361,8 @@ function normalizeProject(input, now = (/* @__PURE__ */ new Date()).toISOString(
     assumptions: (Array.isArray(input.assumptions) ? input.assumptions : []).map(normalizeAssumption).filter((a) => a !== null),
     openQuestions: (Array.isArray(input.openQuestions) ? input.openQuestions : []).map(normalizeQuestion).filter((q) => q !== null)
   };
+  if (physical) project.physical = physical;
+  return project;
 }
 function parseProject(text) {
   let data;
@@ -311,6 +375,321 @@ function parseProject(text) {
 }
 function serializeProject(project) {
   return JSON.stringify(project, null, 2) + "\n";
+}
+
+// src/core/physical.ts
+var TRANSLITERATE = { þ: "th", ð: "d", æ: "ae", ø: "o", ß: "ss", œ: "oe", ł: "l", đ: "d" };
+var RESERVED = new Set(
+  "all alter and any array as asc authorization between both by case cast check collate column constraint create cross current current_date current_time current_timestamp current_user default delete desc distinct do drop else end except exists false fetch for foreign from full grant group having ilike in index inner insert intersect into is join key lateral leading left like limit localtime localtimestamp natural not null of offset on only or order outer percent plan primary qualify references regexp right rlike row rows sample select session_user set some table tablesample then to top trailing trigger true union unique update user using values view when where window with add backup begin break browse bulk cascade checkpoint close clustered coalesce commit compute contains continue convert cursor database dbcc deallocate declare deny disk distributed double dump errlvl escape exec execute exit external file fillfactor function goto holdlock identity identitycol if kill lineno load merge national nocheck nonclustered nullif off offsets open option over pivot precision print proc procedure public raiserror read readtext reconfigure replication restore restrict return revert revoke rollback rowcount rowguidcol rule save schema securityaudit setuser shutdown statistics system_user textsize tran transaction truncate try_convert tsequal unpivot updatetext use varying waitfor while writetext account connect connection following gscluster increment issue minus organization start try_cast whenever analyse analyze asymmetric deferrable initially placing returning symmetric variadic".split(" ")
+);
+function sqlName(text, fallback = "item") {
+  const ascii = text.toLowerCase().replace(/[þðæøßœłđ]/g, (c) => TRANSLITERATE[c] ?? c).normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  let name = ascii.replace(/%/g, " pct ").replace(/#/g, " number ").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50).replace(/_+$/, "");
+  if (!name) name = fallback;
+  if (/^[0-9]/.test(name)) name = `n_${name}`;
+  return name;
+}
+function uniqueName(name, used) {
+  let candidate = name;
+  for (let n = 2; used.has(candidate); n++) candidate = `${name}_${n}`;
+  used.add(candidate);
+  return candidate;
+}
+function columnName(text, subject, used, fallback = "value") {
+  let name = sqlName(text, fallback);
+  if (RESERVED.has(name)) name = `${subject}_${name}`;
+  return uniqueName(name, used);
+}
+var BUSINESS_KEY = /(^|\b|_)(id|code|number|no|nr|num|key|sku|ean|upc|gtin|isbn|iban|ssn|kennitala)$/i;
+var TEXT_SUFFIX = /\b(type|name|code|category|group|class|status|description|reason|band|tier|segment|method|mode|label|level)$/i;
+function inferAttributeType(name) {
+  if (TEXT_SUFFIX.test(name.trim())) return "text";
+  if (/\b(date|dob|birthday|since|opened|closed|hired|started|ended)\b/i.test(name) && !/\b(key|id|name|type)\b/i.test(name)) {
+    return "date";
+  }
+  if (/^(is|has|can|was)\b|\b(flag|indicator|yes\/no)\b/i.test(name)) return "boolean";
+  if (/\b(price|amount|rate|ratio|weight|percent|pct|share|latitude|longitude|lat|lng|cost|margin)\b|%/i.test(name)) return "decimal";
+  if (/\b(year|age|count|number of|quantity|size in|seats|floors|rank|level number|week number|day number)\b/i.test(name)) {
+    return "integer";
+  }
+  return "text";
+}
+var INTEGER_UNIT = /\b(count|counts|units?|items?|pieces?|pcs|qty|quantity|number|seats|visits|views|clicks|sessions|people|users|members|events|orders|lines|tickets|transactions|days|nights|months)\b|#/i;
+var DURATION = /\b(hours?|minutes?|mins?|seconds?|secs?|lag|duration|time to)\b/i;
+var PERCENT = /%|\b(percent|pct|ratio|rate|share)\b/i;
+function inferMeasureType(measure) {
+  const text = `${measure.name} ${measure.unit}`;
+  if (measure.dataType === "integer") return { dataType: "integer", precision: 0, scale: 0 };
+  if (PERCENT.test(text)) return { dataType: "decimal", precision: 9, scale: 4 };
+  if (measure.dataType !== "decimal" && INTEGER_UNIT.test(text) && !/\b(amount|value|cost|price|hours|minutes)\b/i.test(text)) {
+    return { dataType: "integer", precision: 0, scale: 0 };
+  }
+  if (/\b(currency|amount|price|cost|revenue|value|balance|fee|eur|usd|isk|gbp|dkk|sek|nok|\$|€|£)\b|[$€£]/i.test(text)) {
+    return { dataType: "decimal", precision: 18, scale: 2 };
+  }
+  if (DURATION.test(text)) return { dataType: "decimal", precision: 12, scale: 2 };
+  return { dataType: "decimal", precision: 18, scale: 4 };
+}
+var DATE_PARTS = [
+  { match: /^(the )?(calendar |full |actual )?date$/i, part: "date", dataType: "date" },
+  { match: /fiscal.*(year)/i, part: "fiscal-year", dataType: "integer" },
+  { match: /fiscal.*(period|month|week|quarter)/i, part: "fiscal-period", dataType: "text" },
+  { match: /holiday/i, part: "holiday", dataType: "boolean" },
+  { match: /weekend|weekday flag/i, part: "weekend", dataType: "boolean" },
+  { match: /day.*week|weekday|day name/i, part: "day-of-week", dataType: "text" },
+  { match: /day.*month|day number|^day$/i, part: "day-of-month", dataType: "integer" },
+  { match: /week/i, part: "week", dataType: "integer" },
+  { match: /year.?month|month.?year|period/i, part: "year-month", dataType: "text" },
+  { match: /month.*(number|no)/i, part: "month-number", dataType: "integer" },
+  { match: /month/i, part: "month-name", dataType: "text" },
+  { match: /quarter/i, part: "quarter", dataType: "text" },
+  { match: /year/i, part: "year", dataType: "integer" }
+];
+var DEFAULT_DATE_PARTS = [
+  { name: "day_of_week", part: "day-of-week", dataType: "text" },
+  { name: "day_of_month", part: "day-of-month", dataType: "integer" },
+  { name: "week_of_year", part: "week", dataType: "integer" },
+  { name: "month_number", part: "month-number", dataType: "integer" },
+  { name: "month_name", part: "month-name", dataType: "text" },
+  { name: "year_month", part: "year-month", dataType: "text" },
+  { name: "calendar_quarter", part: "quarter", dataType: "text" },
+  { name: "calendar_year", part: "year", dataType: "integer" },
+  { name: "is_weekend", part: "weekend", dataType: "boolean" }
+];
+var TEXT = (length) => ({ length });
+function dimensionTable(dim, tableName) {
+  const subject = sqlName(displayName(dim, "dimension"), "dimension");
+  const used = /* @__PURE__ */ new Set();
+  const columns = [];
+  const label = displayName(dim, "Untitled dimension");
+  const calendar = isDateDimension(dim) && dim.kind !== "junk";
+  const keyColumn = uniqueName(`${subject}_key`, used);
+  columns.push({
+    name: keyColumn,
+    role: "surrogate-key",
+    dataType: "integer",
+    nullable: false,
+    source: { kind: "generated", purpose: "business-key" },
+    note: calendar ? "Surrogate key in yyyymmdd form, e.g. 20250131" : "Surrogate key: a meaningless integer the facts join on"
+  });
+  const attributes = dim.attributes.filter((a) => a.name.trim());
+  const businessKey = [];
+  let scd2 = false;
+  if (calendar) {
+    columns.push({
+      name: uniqueName("full_date", used),
+      role: "business-key",
+      dataType: "date",
+      nullable: false,
+      source: { kind: "generated", purpose: "full-date" },
+      note: "The calendar date",
+      added: true
+    });
+    businessKey.push("full_date");
+    if (attributes.length === 0) {
+      for (const d of DEFAULT_DATE_PARTS) {
+        columns.push({
+          name: uniqueName(d.name, used),
+          role: "attribute",
+          dataType: d.dataType,
+          size: d.dataType === "text" ? TEXT(20) : void 0,
+          nullable: false,
+          source: { kind: "date-part", part: d.part },
+          note: "Standard calendar attribute",
+          added: true
+        });
+      }
+    }
+  } else {
+    const explicit = attributes.filter((a) => a.businessKey);
+    const byName = attributes.find((a) => BUSINESS_KEY.test(a.name.trim()));
+    const byScd = attributes[0]?.scdType === 0 && inferAttributeType(attributes[0].name) === "text" ? attributes[0] : void 0;
+    const inferred = byName ?? byScd;
+    const keys = explicit.length ? explicit : inferred ? [inferred] : [];
+    if (keys.length === 0 && dim.kind !== "junk") {
+      const name = uniqueName(`${subject}_code`, used);
+      columns.push({
+        name,
+        role: "business-key",
+        dataType: "text",
+        size: TEXT(50),
+        nullable: false,
+        source: { kind: "generated", purpose: "business-key" },
+        note: "Business key from the source system (added: the design lists none)",
+        added: true
+      });
+      businessKey.push(name);
+    }
+    for (const a of keys) {
+      const name = columnName(a.name, subject, used);
+      columns.push({
+        name,
+        role: "business-key",
+        dataType: a.dataType ?? "text",
+        size: (a.dataType ?? "text") === "text" ? TEXT(50) : void 0,
+        nullable: false,
+        source: { kind: "attribute", attribute: a },
+        note: a.description.trim() || "Business key from the source system"
+      });
+      businessKey.push(name);
+    }
+    if (attributes.length === 0) {
+      columns.push({
+        name: uniqueName(`${subject}_name`, used),
+        role: "attribute",
+        dataType: "text",
+        size: TEXT(100),
+        nullable: false,
+        source: { kind: "generated", purpose: "name" },
+        note: "Descriptive name (added: the design lists no attributes yet)",
+        added: true
+      });
+    }
+  }
+  for (const a of attributes) {
+    if (columns.some((c) => c.source.kind === "attribute" && c.source.attribute.id === a.id)) continue;
+    const part = calendar ? DATE_PARTS.find((d) => d.match.test(a.name)) : void 0;
+    if (part?.part === "date") continue;
+    const dataType = a.dataType ?? part?.dataType ?? inferAttributeType(a.name);
+    const name = columnName(a.name, subject, used);
+    columns.push({
+      name,
+      role: "attribute",
+      dataType,
+      size: dataType === "text" ? TEXT(part ? 20 : 100) : dataType === "decimal" ? { precision: 18, scale: 4 } : void 0,
+      nullable: !part,
+      source: part && !a.sampleValues?.length ? { kind: "date-part", part: part.part } : { kind: "attribute", attribute: a },
+      note: [a.description.trim(), a.scdType != null && !calendar ? `SCD type ${a.scdType}` : ""].filter(Boolean).join(" · ") || (part ? "Calendar attribute" : "")
+    });
+    if (a.scdType === 2) scd2 = true;
+    if (a.scdType === 3) {
+      columns.push({
+        name: uniqueName(`prior_${name}`, used),
+        role: "history",
+        dataType,
+        size: dataType === "text" ? TEXT(100) : void 0,
+        nullable: true,
+        source: { kind: "generated", purpose: "prior" },
+        note: `Previous value of ${name} (SCD type 3)`,
+        added: true
+      });
+    }
+  }
+  if (scd2) {
+    const history = [
+      ["row_effective_date", "date", "effective-from", "First day this version of the row is valid (SCD type 2)"],
+      ["row_expiration_date", "date", "effective-to", "Last day this version is valid; 9999-12-31 while current"],
+      ["is_current_row", "boolean", "current", "True for the current version of each business key"]
+    ];
+    for (const [name, dataType, purpose, note] of history) {
+      columns.push({ name: uniqueName(name, used), role: "history", dataType, nullable: false, source: { kind: "generated", purpose }, note, added: true });
+    }
+  }
+  return {
+    name: tableName,
+    kind: "dimension",
+    sourceId: dim.id,
+    label,
+    columns,
+    keyColumn,
+    businessKey,
+    scd2,
+    calendar,
+    junk: dim.kind === "junk",
+    description: dim.description.trim() || `${label} dimension`
+  };
+}
+function roleKeyName(role, subject) {
+  if (!role) return `${subject}_key`;
+  const r = sqlName(role, subject);
+  return `_${r}_`.includes(`_${subject}_`) ? `${r}_key` : `${r}_${subject}_key`;
+}
+function factTable(process2, tableName, dims) {
+  const used = /* @__PURE__ */ new Set();
+  const columns = [];
+  const subject = sqlName(displayName(process2, "fact"), "fact");
+  for (const usage of process2.dimensions) {
+    const entry = dims.get(usage.dimensionId);
+    if (!entry) continue;
+    const { dimension, table } = entry;
+    const dimSubject = sqlName(displayName(dimension, "dimension"), "dimension");
+    if (!table) {
+      columns.push({
+        name: columnName(displayName(dimension, "reference"), subject, used),
+        role: "degenerate",
+        dataType: "text",
+        size: TEXT(50),
+        nullable: false,
+        source: { kind: "degenerate", dimensionId: dimension.id },
+        note: `Degenerate dimension: ${displayName(dimension)}`
+      });
+      continue;
+    }
+    const roles = usage.roles.length ? usage.roles : [null];
+    for (const role of roles) {
+      columns.push({
+        name: uniqueName(roleKeyName(role, dimSubject), used),
+        role: "foreign-key",
+        dataType: "integer",
+        nullable: false,
+        references: { table: table.name, column: table.keyColumn },
+        source: { kind: "usage", dimensionId: dimension.id, role },
+        note: role ? `${role} (role of ${table.label})` : table.label
+      });
+    }
+  }
+  for (const m of process2.facts.filter((f) => f.name.trim())) {
+    const t = inferMeasureType(m);
+    columns.push({
+      name: columnName(m.name, subject, used),
+      role: "measure",
+      dataType: t.dataType,
+      size: t.dataType === "decimal" ? { precision: t.precision, scale: t.scale } : void 0,
+      nullable: true,
+      source: { kind: "measure", measure: m },
+      note: [m.additivity, m.unit.trim(), m.description.trim()].filter(Boolean).join(" · "),
+      additivity: m.additivity
+    });
+  }
+  const label = displayName(process2, "Untitled process");
+  return {
+    name: tableName,
+    kind: "fact",
+    sourceId: process2.id,
+    label,
+    columns,
+    grain: process2.grain.trim(),
+    factTableType: process2.factTableType,
+    description: process2.description.trim() || `${label} fact table`
+  };
+}
+function physicalModel(project) {
+  const tableNames = /* @__PURE__ */ new Set();
+  const notes = [];
+  const dims = /* @__PURE__ */ new Map();
+  const tables = [];
+  for (const dim of project.dimensions) {
+    if (dim.kind === "degenerate") {
+      dims.set(dim.id, { dimension: dim, table: null });
+      continue;
+    }
+    const table = dimensionTable(dim, uniqueName(`dim_${sqlName(displayName(dim, "dimension"), "dimension")}`, tableNames));
+    dims.set(dim.id, { dimension: dim, table });
+    tables.push(table);
+  }
+  for (const p of project.processes) {
+    const name = uniqueName(`fact_${sqlName(displayName(p, "process"), "process")}`, tableNames);
+    const table = factTable(p, name, dims);
+    if (!table.columns.some((c) => c.role === "foreign-key" || c.role === "degenerate")) {
+      notes.push(`${table.label} has no dimensions yet, so its fact table has no keys. Add dimensions in phase 6.`);
+    }
+    tables.push(table);
+  }
+  if (project.processes.length === 0) notes.push("Add business processes to get fact tables.");
+  return { tables, notes };
+}
+function isReadyToBuild(process2) {
+  return process2.grain.trim().length > 0 && process2.dimensions.length > 0 && (process2.facts.length > 0 || process2.factTableType === "factless");
 }
 
 // src/core/validate.ts
@@ -437,7 +816,13 @@ function validateProject(project) {
         });
       }
       if (p.factTableType === "accumulating-snapshot") {
-        const roles = dateUsages.reduce((sum, u) => sum + Math.max(1, u.roles.length), 0);
+        const roleSets = /* @__PURE__ */ new Map();
+        for (const u of dateUsages) {
+          const set = roleSets.get(u.dimensionId) ?? /* @__PURE__ */ new Set();
+          for (const r of u.roles.length ? u.roles : [""]) set.add(r.trim().toLowerCase());
+          roleSets.set(u.dimensionId, set);
+        }
+        const roles = [...roleSets.values()].reduce((sum, set) => sum + set.size, 0);
         if (roles < 2) {
           add({
             code: "KD203",
@@ -617,6 +1002,13 @@ var PHASES = [
     stage: "deliver",
     title: "Review & export",
     goal: "Resolve findings and export the deliverables."
+  },
+  {
+    id: "prototype",
+    number: 11,
+    stage: "build",
+    title: "Prototype",
+    goal: "Explore the design as tables with sample data, then get the CREATE TABLE script and index advice."
   }
 ];
 var filled = (s) => s.trim().length > 0;
@@ -696,6 +1088,10 @@ function phaseStatus(project, id2, errorCount, warningCount) {
         detail: n === 0 ? "Nothing to review yet" : issues === 0 ? "No errors or warnings" : `${plural(errorCount, "error")}, ${plural(warningCount, "warning")}`
       };
     }
+    case "prototype": {
+      const ready = processes.filter(isReadyToBuild).length;
+      return status(id2, ready, n, n === 0 ? "Add business processes first" : `${ready} of ${n} fact tables ready to build`);
+    }
   }
 }
 
@@ -763,53 +1159,65 @@ var FONT_SANS = tokens_default.font.sans;
 var FONT_MONO = tokens_default.font.mono;
 
 // src/core/text.ts
+var XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
 function escapeXml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return s.replace(XML_INVALID, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function mdCell(s) {
   return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();
+}
+function mdInline(s) {
+  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/([`*_[\]|])/g, "\\$1").replace(/\s*\r?\n\s*/g, " ").trim().replace(/^([#+-])/, "\\$1").replace(/^(\d+)([.)])/, "$1\\$2");
+}
+function mdCode(s) {
+  const text = s.replace(/\s*\r?\n\s*/g, " ").trim();
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longest + 1);
+  const pad2 = text.startsWith("`") || text.endsWith("`") ? " " : "";
+  return `${fence}${pad2}${text}${pad2}${fence}`;
 }
 function csvCell(s) {
   const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 function slugify(s, fallback = "item") {
-  const slug = s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const slug = s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60).replace(/^-+|-+$/g, "");
   return slug || fallback;
 }
 function wrapText(text, maxWidth, maxLines) {
   const maxChars = Math.max(2, Math.floor(maxWidth));
-  const words = text.trim().split(/\s+/).filter(Boolean);
+  const words = text.trim().split(/\s+/).filter(Boolean).map((w) => Array.from(w));
   const lines = [];
-  let current = "";
-  const push = (line) => lines.push(line);
+  let current = [];
+  const push = (line) => lines.push(line.join(""));
   for (let word of words) {
     while (word.length > maxChars) {
-      if (current) {
+      if (current.length) {
         push(current);
-        current = "";
+        current = [];
       }
-      push(word.slice(0, maxChars - 1) + "-");
+      push([...word.slice(0, maxChars - 1), "-"]);
       word = word.slice(maxChars - 1);
     }
-    if (!current) current = word;
-    else if ((current + " " + word).length <= maxChars) current += " " + word;
+    if (!current.length) current = word;
+    else if (current.length + 1 + word.length <= maxChars) current = [...current, " ", ...word];
     else {
       push(current);
       current = word;
     }
   }
-  if (current) push(current);
+  if (current.length) push(current);
   if (lines.length > maxLines) {
     const kept = lines.slice(0, maxLines);
-    const last = kept[maxLines - 1];
-    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1) : last) + "…";
+    const last = Array.from(kept[maxLines - 1]);
+    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1).join("") : last.join("")) + "…";
     return kept;
   }
   return lines;
 }
 function truncate(s, max) {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  const chars = Array.from(s);
+  return chars.length > max ? chars.slice(0, max - 1).join("") + "…" : s;
 }
 
 // src/core/busMatrix.ts
@@ -871,7 +1279,7 @@ function busMatrixToCsv(project, options) {
     ["Business process", "Grain", ...m.columns.map((c) => displayName(c.dimension))],
     ...m.rows.map((r) => [displayName(r.process), r.process.grain, ...r.cells.map(cellText)])
   ];
-  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  return "\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 function busMatrixToHtml(project, options = {}) {
   const c = PALETTES[options.theme ?? "light"];
@@ -1127,7 +1535,7 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
   const out = [];
   const h = (s) => out.push("", s, "");
   out.push(
-    `# ${title} — dimensional requirements`,
+    `# ${mdInline(title)} — dimensional requirements`,
     "",
     `> Generated by Kimball Designer ${APP_VERSION} on ${now.slice(0, 10)}. Source: project file \`${meta.id}\`.`
   );
@@ -1141,7 +1549,7 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
     `| **Out of scope** | ${dash(meta.scopeOut)} |`
   );
   if (meta.successCriteria.length) {
-    out.push("", "**Success criteria**", "", ...meta.successCriteria.map((s) => `- ${s}`));
+    out.push("", "**Success criteria**", "", ...meta.successCriteria.map((s) => `- ${mdInline(s)}`));
   }
   h("## 2. Stakeholders");
   if (stakeholders.length === 0) out.push("_No stakeholders recorded._");
@@ -1169,25 +1577,27 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
     out.push("| Business process | Fact table type | Grain | Dimensions | Facts | Value | Feasibility |", "|---|---|---|---|---|---|---|");
     for (const p of processes) {
       out.push(
-        `| ${dash(displayName(p))} | ${dash(optionLabel(FACT_TABLE_TYPES, p.factTableType))} | ${dash(p.grain)} | ${p.dimensions.length} | ${p.facts.length} | ${p.businessValue ?? "—"} | ${p.feasibility ?? "—"} |`
+        `| ${dash(displayName(p))} | ${dash(optionLabel(FACT_TABLE_TYPES, p.factTableType))} | ${dash(p.grain)} | ${new Set(p.dimensions.map((u) => u.dimensionId)).size} | ${p.facts.length} | ${p.businessValue ?? "—"} | ${p.feasibility ?? "—"} |`
       );
     }
     processes.forEach((p, i) => {
-      out.push("", `### 4.${i + 1} ${displayName(p)}`, "");
-      if (p.description.trim()) out.push(p.description.trim(), "");
+      out.push("", `### 4.${i + 1} ${mdInline(displayName(p))}`, "");
+      if (p.description.trim()) out.push(mdInline(p.description), "");
       out.push(
-        `- **Grain:** ${p.grain.trim() ? `\`${p.grain.trim()}\`` : "_not declared_"}`,
+        `- **Grain:** ${p.grain.trim() ? mdCode(p.grain) : "_not declared_"}`,
         `- **Fact table type:** ${optionLabel(FACT_TABLE_TYPES, p.factTableType) || "_not set_"}`,
-        `- **Owner:** ${p.owner.trim() || "—"}`,
-        `- **Source systems:** ${p.sourceSystems.join(", ") || "—"}`
+        `- **Owner:** ${mdInline(p.owner) || "—"}`,
+        `- **Source systems:** ${mdInline(p.sourceSystems.join(", ")) || "—"}`
       );
       const reqs = requirements.filter((r) => r.processIds.includes(p.id));
       if (reqs.length) out.push(`- **Answers requirements:** ${reqs.map((r) => `R${requirements.indexOf(r) + 1}`).join(", ")}`);
       out.push("", "**Dimensions**", "");
       if (p.dimensions.length === 0) out.push("_None yet._");
-      for (const u of p.dimensions) {
-        const d = dimensions.find((x) => x.id === u.dimensionId);
-        out.push(`- ${d ? displayName(d) : u.dimensionId}${u.roles.length ? ` — roles: ${u.roles.join(", ")}` : ""}`);
+      const roles = /* @__PURE__ */ new Map();
+      for (const u of p.dimensions) roles.set(u.dimensionId, [.../* @__PURE__ */ new Set([...roles.get(u.dimensionId) ?? [], ...u.roles])]);
+      for (const [id2, r] of roles) {
+        const d = dimensions.find((x) => x.id === id2);
+        out.push(`- ${mdInline(d ? displayName(d) : id2)}${r.length ? ` — roles: ${mdInline(r.join(", "))}` : ""}`);
       }
       out.push("", "**Facts**", "");
       if (p.facts.length === 0) out.push(p.factTableType === "factless" ? "_Factless fact table._" : "_None yet._");
@@ -1208,12 +1618,12 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
       const users = processesUsing(project, d.id);
       const attrs = d.attributes.map((a) => `${displayName(a)}${a.scdType != null ? ` (${optionLabel(SCD_TYPES, a.scdType)})` : ""}`).join(", ");
       out.push(
-        `| ${dash(displayName(d))} | ${optionLabel(DIMENSION_KINDS, d.kind)} | ${dash(users.map((p) => displayName(p)).join(", "))} | ${users.length >= 2 ? "Yes" : "No"} | ${dash(attrs)} | ${dash(d.description)} |`
+        `| ${dash(displayName(d))} | ${optionLabel(DIMENSION_KINDS, d.kind)} | ${dash(users.map((p) => displayName(p)).join(", "))} | ${isConformedUsage(d.kind, users.length) ? "Yes" : "No"} | ${dash(attrs)} | ${dash(d.description)} |`
       );
     }
     const withHierarchies = dimensions.filter((d) => d.hierarchies.length);
     if (withHierarchies.length) {
-      out.push("", "**Hierarchies**", "", ...withHierarchies.map((d) => `- ${displayName(d)}: ${d.hierarchies.join("; ")}`));
+      out.push("", "**Hierarchies**", "", ...withHierarchies.map((d) => `- ${mdInline(displayName(d))}: ${mdInline(d.hierarchies.join("; "))}`));
     }
   }
   h("## 6. Enterprise bus matrix");
@@ -1230,10 +1640,10 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
   }
   h("## 8. Assumptions and open questions");
   out.push("**Assumptions**", "");
-  out.push(...project.assumptions.length ? project.assumptions.map((a) => `- ${a.text}`) : ["_None recorded._"]);
+  out.push(...project.assumptions.length ? project.assumptions.map((a) => `- ${mdInline(a.text)}`) : ["_None recorded._"]);
   out.push("", "**Open questions**", "");
   out.push(
-    ...project.openQuestions.length ? project.openQuestions.map((q) => `- [${q.status === "answered" ? "x" : " "}] ${q.text}${q.owner ? ` — _${q.owner}_` : ""}`) : ["_None recorded._"]
+    ...project.openQuestions.length ? project.openQuestions.map((q) => `- [${q.status === "answered" ? "x" : " "}] ${mdInline(q.text)}${q.owner.trim() ? ` — _${mdInline(q.owner)}_` : ""}`) : ["_None recorded._"]
   );
   h("## 9. Validation summary");
   const findings = validateProject(project);
@@ -2266,6 +2676,27 @@ var GUIDANCE = {
     ],
     pitfalls: ['Skipping the sponsor review because the diagrams "look right".'],
     examples: []
+  },
+  prototype: {
+    why: "A design is easier to judge with rows in it. The prototype turns each dimension and business process into a table, fills them with made-up data and lets you ask the questions from your requirements. You see whether the grain, the dimensions and the facts really answer them before anyone writes a load job, and you get a CREATE TABLE script and index advice to start the build.",
+    ask: [
+      "Can we answer each must-have requirement with one of these queries?",
+      "Which attribute is the business key of each dimension in the source system?",
+      "Roughly how many rows will each fact table get per day or month?",
+      "Which database platform will the warehouse run on?"
+    ],
+    tips: [
+      "Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.",
+      "Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.",
+      "Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.",
+      "Treat the script as a starting point: review data types, text lengths and business keys before you build."
+    ],
+    pitfalls: [
+      "Mistaking sample data for real data: the rows are random, only the structure is yours.",
+      "Adding indexes everywhere: fact tables need few (or a columnstore); dimensions need their keys.",
+      "Building every table at once instead of the top process on the prioritisation grid first."
+    ],
+    examples: ['"Net sales amount by product category and month" for a retail sales fact table.']
   }
 };
 var INTERVIEW_QUESTIONS = {
@@ -2317,8 +2748,1028 @@ var HELP_GLOSSARY = [
   ...FACT_TABLE_TYPES.map((o) => ({ term: `${o.label} fact table`, definition: o.description })),
   ...ADDITIVITY.map((o) => ({ term: `${o.label} fact`, definition: o.description })),
   ...DIMENSION_KINDS.filter((o) => o.value !== "standard").map((o) => ({ term: o.value === "date" ? "Date dimension" : `${o.label} dimension`, definition: o.description })),
+  { term: "Surrogate key", definition: "A meaningless integer that identifies a dimension row. Facts join on it, so history (type 2) and source changes never break the joins." },
+  { term: "Business key", definition: "The identifier the source system uses, such as a customer number or SKU. Kept as a dimension attribute; also called the natural key." },
   { term: "Slowly changing dimension (SCD)", definition: `How a dimension attribute keeps history when it changes. ${SCD_TYPES.map((o) => `${o.label}: ${o.description.replace(/\.$/, "")}`).join(". ")}.` }
 ];
+
+// src/core/ddl.ts
+function sqlType(column, dialect) {
+  const size = column.size;
+  switch (column.dataType) {
+    case "text": {
+      const n = size && "length" in size ? size.length : 100;
+      return dialect === "sqlserver" ? `nvarchar(${n})` : `varchar(${n})`;
+    }
+    case "integer":
+      return dialect === "sqlserver" ? "int" : "integer";
+    case "decimal": {
+      const { precision, scale } = size && "precision" in size ? size : { precision: 18, scale: 4 };
+      return dialect === "snowflake" ? `number(${precision},${scale})` : dialect === "sqlserver" ? `decimal(${precision},${scale})` : `numeric(${precision},${scale})`;
+    }
+    case "date":
+      return "date";
+    case "boolean":
+      return dialect === "sqlserver" ? "bit" : "boolean";
+  }
+}
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36).slice(0, 5);
+}
+function objectName(prefix, table, columns = []) {
+  const name = [prefix, table, ...columns].join("_");
+  return name.length <= 60 ? name : `${name.slice(0, 53).replace(/_+$/, "")}_${hash(name)}`;
+}
+var comment = (text) => text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+var dateKeys = (fact, model) => fact.columns.filter((c) => c.role === "foreign-key" && model.tables.find((t) => t.name === c.references?.table)?.calendar);
+var keyColumns = (fact) => fact.columns.filter((c) => c.role === "foreign-key" || c.role === "degenerate");
+var currentFlag = (dialect) => dialect === "sqlserver" ? "is_current_row = 1" : "is_current_row";
+function dimensionAdvice(table, dialect) {
+  const out = [];
+  const pk = table.keyColumn;
+  out.push({
+    table: table.name,
+    kind: "primary-key",
+    columns: [pk],
+    sql: `CONSTRAINT ${objectName("pk", table.name)} PRIMARY KEY${dialect === "sqlserver" ? " CLUSTERED" : ""} (${pk})`,
+    when: "table",
+    why: dialect === "snowflake" ? "Surrogate key. Snowflake records but does not enforce it; BI tools use it to suggest joins, so the load must keep it unique." : `Surrogate key: every fact table joins on it${dialect === "sqlserver" ? ", so it is the clustered index" : ""}.`
+  });
+  const bk = table.businessKey ?? [];
+  const attrs = table.columns.filter((c) => c.role === "attribute").map((c) => c.name);
+  if (dialect === "snowflake") {
+    if (bk.length) {
+      out.push({
+        table: table.name,
+        kind: "search",
+        columns: bk,
+        sql: `ALTER TABLE ${table.name} ADD SEARCH OPTIMIZATION ON EQUALITY(${bk.join(", ")});`,
+        when: "later",
+        why: "Only if you often look up single members by business key in a large dimension (Enterprise edition; costs credits). Snowflake has no B-tree indexes: micro-partition pruning does the rest."
+      });
+    }
+    return out;
+  }
+  const uniq = dialect === "sqlserver" ? "CREATE UNIQUE NONCLUSTERED INDEX" : "CREATE UNIQUE INDEX";
+  if (table.calendar) {
+    out.push({
+      table: table.name,
+      kind: "business-key",
+      columns: bk,
+      sql: `${uniq} ${objectName("ux", table.name, bk)} ON ${table.name} (${bk.join(", ")});`,
+      when: "now",
+      why: "One row per calendar day; lets loads and queries find a date key from a date."
+    });
+  } else if (bk.length && table.scd2) {
+    out.push(
+      {
+        table: table.name,
+        kind: "business-key",
+        columns: bk,
+        sql: `${uniq} ${objectName("ux", table.name, ["current"])} ON ${table.name} (${bk.join(", ")}) WHERE ${currentFlag(dialect)};`,
+        when: "now",
+        why: "Type 2 history: only one current row per business key. Fact loads use this index to find the current surrogate key."
+      },
+      {
+        table: table.name,
+        kind: "business-key",
+        columns: [...bk, "row_effective_date"],
+        sql: `${uniq} ${objectName("ux", table.name, ["version"])} ON ${table.name} (${[...bk, "row_effective_date"].join(", ")});`,
+        when: "now",
+        why: "One version per business key and start date; finds the version that was valid on a given day."
+      }
+    );
+  } else if (bk.length) {
+    out.push({
+      table: table.name,
+      kind: "business-key",
+      columns: bk,
+      sql: `${uniq} ${objectName("ux", table.name, bk)} ON ${table.name} (${bk.join(", ")});`,
+      when: "now",
+      why: "One row per business key: catches duplicate loads and makes the surrogate-key lookup during fact loads fast."
+    });
+  } else if (attrs.length) {
+    out.push({
+      table: table.name,
+      kind: "business-key",
+      columns: attrs,
+      sql: `${uniq} ${objectName("ux", table.name, ["combination"])} ON ${table.name} (${attrs.join(", ")});`,
+      when: "now",
+      why: "A junk dimension holds each combination of flags and codes once."
+    });
+  }
+  return out;
+}
+function factAdvice(table, model, dialect) {
+  const out = [];
+  const fks = table.columns.filter((c) => c.role === "foreign-key");
+  const degenerate = table.columns.filter((c) => c.role === "degenerate");
+  const dates = dateKeys(table, model);
+  const primaryDate = dates[0];
+  for (const fk of fks) {
+    out.push({
+      table: table.name,
+      kind: "foreign-key",
+      columns: [fk.name],
+      sql: `CONSTRAINT ${objectName("fk", table.name, [fk.name])} FOREIGN KEY (${fk.name}) REFERENCES ${fk.references.table} (${fk.references.column})`,
+      when: "table",
+      why: dialect === "snowflake" ? "Informational foreign key (not enforced); documents the star join for BI tools." : "Every fact row points to an existing dimension row. If constraints slow down large loads, check them in the load instead."
+    });
+  }
+  if (dialect === "postgres") {
+    for (const fk of fks) {
+      out.push({
+        table: table.name,
+        kind: "foreign-key",
+        columns: [fk.name],
+        sql: `CREATE INDEX ${objectName("ix", table.name, [fk.name])} ON ${table.name} (${fk.name});`,
+        when: "now",
+        why: "PostgreSQL does not index foreign keys by itself: one index per key speeds up joins and filters by each dimension."
+      });
+    }
+    for (const d of degenerate) {
+      out.push({
+        table: table.name,
+        kind: "degenerate",
+        columns: [d.name],
+        sql: `CREATE INDEX ${objectName("ix", table.name, [d.name])} ON ${table.name} (${d.name});`,
+        when: "now",
+        why: "Finds every row of one transaction or document (drill-through) by its degenerate dimension."
+      });
+    }
+    if (primaryDate) {
+      out.push({
+        table: table.name,
+        kind: "brin",
+        columns: [primaryDate.name],
+        sql: `CREATE INDEX ${objectName("brin", table.name, [primaryDate.name])} ON ${table.name} USING brin (${primaryDate.name});`,
+        when: "later",
+        why: "For millions of rows loaded in date order: a BRIN index is tiny and makes date-range scans fast. Use it instead of the B-tree index on the same column."
+      });
+      out.push({
+        table: table.name,
+        kind: "partition",
+        columns: [primaryDate.name],
+        sql: `-- Declare the table with PARTITION BY RANGE (${primaryDate.name}) and create one partition per year.`,
+        when: "later",
+        why: "Past roughly 100 million rows, partitions by date make archiving, reloading a period and date-filtered queries cheaper."
+      });
+    }
+  }
+  if (dialect === "sqlserver") {
+    out.push({
+      table: table.name,
+      kind: "columnstore",
+      columns: [],
+      sql: `CREATE CLUSTERED COLUMNSTORE INDEX ${objectName("cci", table.name)} ON ${table.name};`,
+      when: "now",
+      why: "The default for fact tables: compresses the data around ten times and runs aggregations in batch mode. With it, separate indexes per foreign key are usually unnecessary."
+    });
+    if (primaryDate) {
+      out.push({
+        table: table.name,
+        kind: "foreign-key",
+        columns: [primaryDate.name],
+        sql: `CREATE NONCLUSTERED INDEX ${objectName("ix", table.name, [primaryDate.name])} ON ${table.name} (${primaryDate.name});`,
+        when: "later",
+        why: "Only if you often read a few days of detail rows. Loading in date order already lets the columnstore skip segments."
+      });
+      out.push({
+        table: table.name,
+        kind: "partition",
+        columns: [primaryDate.name],
+        sql: `-- Create a partition function and scheme on ${primaryDate.name} (for example one partition per year) and build the table on it.`,
+        when: "later",
+        why: "For very large tables: switch partitions in and out to load or archive a period in seconds."
+      });
+    }
+    for (const d of degenerate) {
+      out.push({
+        table: table.name,
+        kind: "degenerate",
+        columns: [d.name],
+        sql: `CREATE NONCLUSTERED INDEX ${objectName("ix", table.name, [d.name])} ON ${table.name} (${d.name});`,
+        when: "later",
+        why: `Speeds up looking up one ${d.note.replace(/^Degenerate dimension: /, "")} at a time.`
+      });
+    }
+  }
+  if (dialect === "snowflake" && primaryDate) {
+    out.push({
+      table: table.name,
+      kind: "clustering",
+      columns: [primaryDate.name],
+      sql: `ALTER TABLE ${table.name} CLUSTER BY (${primaryDate.name});`,
+      when: "later",
+      why: "Only for very large tables (terabytes) filtered by date where pruning is poor. Automatic clustering costs credits; data loaded in date order is usually clustered already."
+    });
+  }
+  const keys = keyColumns(table).map((c) => c.name);
+  const create = dialect === "sqlserver" ? "CREATE UNIQUE NONCLUSTERED INDEX" : "CREATE UNIQUE INDEX";
+  if (dialect !== "snowflake" && keys.length > 0 && table.factTableType === "periodic-snapshot") {
+    out.push({
+      table: table.name,
+      kind: "grain",
+      columns: keys,
+      sql: `${create} ${objectName("ux", table.name, ["grain"])} ON ${table.name} (${keys.join(", ")});`,
+      when: "later",
+      why: `A periodic snapshot has one row per entity per period. Check these keys match the grain${table.grain ? ` ("${table.grain}")` : ""}, then make them unique.`
+    });
+  }
+  if (table.factTableType === "accumulating-snapshot") {
+    out.push(
+      degenerate.length && dialect !== "snowflake" ? {
+        table: table.name,
+        kind: "grain",
+        columns: degenerate.map((d) => d.name),
+        sql: `${create} ${objectName("ux", table.name, ["grain"])} ON ${table.name} (${degenerate.map((d) => d.name).join(", ")});`,
+        when: "later",
+        why: "An accumulating snapshot has one row per process instance, updated as milestones happen. Make the instance identifier unique once you confirm it; loads update rows by it."
+      } : {
+        table: table.name,
+        kind: "grain",
+        columns: [],
+        sql: "-- Add the order or case number as a degenerate dimension so each row can be found and updated.",
+        when: "later",
+        why: "An accumulating snapshot is updated as milestones happen, so each row needs a stable identifier, such as the order line number. The design has none yet."
+      }
+    );
+  }
+  return out;
+}
+function indexAdvice(model, dialect) {
+  return model.tables.flatMap((t) => t.kind === "dimension" ? dimensionAdvice(t, dialect) : factAdvice(t, model, dialect));
+}
+function columnSql(table, c, dialect) {
+  const surrogate = c.role === "surrogate-key" && !table.calendar;
+  let type = sqlType(c, dialect);
+  if (surrogate) {
+    type = dialect === "postgres" ? "integer GENERATED BY DEFAULT AS IDENTITY" : dialect === "sqlserver" ? "int IDENTITY(1,1)" : "integer AUTOINCREMENT";
+  }
+  return `${c.name} ${type}${c.nullable ? "" : " NOT NULL"}`;
+}
+function tableSql(table, advice, dialect) {
+  const lines = table.columns.map((c) => ({ sql: columnSql(table, c, dialect), note: c.note }));
+  for (const a of advice) if (a.table === table.name && a.when === "table") lines.push({ sql: a.sql });
+  const width = Math.min(48, Math.max(...lines.map((l) => l.sql.length)) + 1);
+  const body = lines.map((l, i) => {
+    const text = `  ${l.sql}${i < lines.length - 1 ? "," : ""}`;
+    return l.note ? `${text.padEnd(width + 3)} -- ${comment(l.note)}` : text;
+  }).join("\n");
+  const kind = table.kind === "dimension" ? "dimension" : "facts";
+  const generic = table.description === `${table.label} ${table.kind === "dimension" ? "dimension" : "fact table"}`;
+  const head = [`-- ${comment(table.label)} ${kind}${generic ? "" : `: ${comment(table.description)}`}`];
+  if (table.grain) head.push(`-- Grain: ${comment(table.grain)}`);
+  if (table.factTableType) head.push(`-- Type: ${table.factTableType.replace("-", " ")} fact table`);
+  if (table.scd2) head.push("-- History: type 2. A change adds a new row with new effective dates; facts keep the key that was current.");
+  if (table.kind === "fact" && !table.columns.some((c) => c.role === "measure")) head.push("-- Factless: count rows to measure how often the event happened.");
+  return `${head.join("\n")}
+CREATE TABLE ${table.name} (
+${body}
+);`;
+}
+function ddlScript(project, options) {
+  const { dialect } = options;
+  const model = options.model ?? physicalModel(project);
+  const advice = indexAdvice(model, dialect);
+  const dims = model.tables.filter((t) => t.kind === "dimension");
+  const facts = model.tables.filter((t) => t.kind === "fact");
+  const out = [
+    `-- ${comment(displayName(project.meta, "Untitled project"))}: star schema for ${optionLabel(SQL_DIALECTS, dialect)}`,
+    `-- Generated by Kimball Designer ${APP_VERSION} from the high-level design. It is a starting point for`,
+    "-- the detailed design: review names, data types, lengths and keys before you build.",
+    `-- ${dims.length} dimension table${dims.length === 1 ? "" : "s"}, ${facts.length} fact table${facts.length === 1 ? "" : "s"}.`
+  ];
+  if (dialect === "snowflake") out.push("-- Snowflake records primary and foreign keys but does not enforce them, and has no indexes.");
+  for (const note of model.notes) out.push(`-- Note: ${comment(note)}`);
+  if (options.dropFirst && model.tables.length) {
+    out.push("", "-- Drop in reverse dependency order so the script can be re-run.");
+    for (const t of [...facts, ...dims]) out.push(`DROP TABLE IF EXISTS ${t.name};`);
+  }
+  if (dims.length) out.push("", "-- ═══ Dimensions ═══", ...dims.flatMap((t) => ["", tableSql(t, advice, dialect)]));
+  if (facts.length) out.push("", "-- ═══ Facts ═══", ...facts.flatMap((t) => ["", tableSql(t, advice, dialect)]));
+  const section = (title, items, commented) => {
+    if (!items.length) return;
+    out.push("", title);
+    let table = "";
+    let why = "";
+    for (const a of items) {
+      if (a.table !== table) {
+        out.push("", `-- ${a.table}`);
+        table = a.table;
+        why = "";
+      }
+      if (a.why !== why) out.push(`-- ${comment(a.why)}`);
+      why = a.why;
+      out.push(commented && !a.sql.startsWith("--") ? `-- ${a.sql}` : a.sql);
+    }
+  };
+  section("-- ═══ Indexes ═══", advice.filter((a) => a.when === "now"), false);
+  section("-- ═══ Recommended later (uncomment when it applies) ═══", advice.filter((a) => a.when === "later"), true);
+  return out.join("\n") + "\n";
+}
+function indexAdviceToMarkdown(project, dialect, model = physicalModel(project)) {
+  const advice = indexAdvice(model, dialect);
+  const label = optionLabel(SQL_DIALECTS, dialect);
+  const out = [
+    `# Index and key recommendations: ${displayName(project.meta, "Untitled project")}`,
+    "",
+    `For ${label}. *Now* is in the CREATE TABLE script; *later* is commented out there, to apply when the table is large or the grain is confirmed.`,
+    ""
+  ];
+  for (const t of model.tables) {
+    const groups = groupAdvice(advice.filter((a) => a.table === t.name));
+    if (!groups.length) continue;
+    out.push(`## ${t.name}`, "", "| When | Columns | Why |", "|---|---|---|");
+    for (const g of groups) {
+      const when = g.when === "table" ? "now (in CREATE TABLE)" : g.when;
+      const cols = g.columns.length ? g.columns.map((c) => `\`${c}\``).join(", ") : "*whole table*";
+      out.push(`| ${when} | ${cols} | ${g.why.replace(/\|/g, "\\|")} |`);
+    }
+    out.push("");
+  }
+  return out.join("\n");
+}
+function groupAdvice(advice) {
+  const out = [];
+  for (const a of advice) {
+    const last = out[out.length - 1];
+    if (last && last.table === a.table && last.when === a.when && last.why === a.why) {
+      for (const c of a.columns) if (!last.columns.includes(c)) last.columns.push(c);
+      last.statements.push(a.sql);
+    } else {
+      out.push({ table: a.table, when: a.when, kind: a.kind, columns: [...a.columns], why: a.why, statements: [a.sql] });
+    }
+  }
+  return out;
+}
+
+// src/core/sampledata.ts
+var DEFAULT_FACT_ROWS = 1e3;
+var MAX_SAMPLE_DAYS = 3660;
+var FAR_FUTURE = "9999-12-31";
+function hash32(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function random(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var int = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
+var choose = (rng, list2) => list2[Math.floor(rng() * list2.length)];
+var round2 = (n, decimals) => Number(n.toFixed(decimals));
+var skewed = (rng, n) => Math.min(n - 1, Math.floor(Math.pow(rng(), 1.6) * n));
+var DAY = 864e5;
+var toTime = (iso) => Date.parse(`${iso}T00:00:00Z`);
+var toIso = (t) => new Date(t).toISOString().slice(0, 10);
+var dateKey = (iso) => Number(iso.replace(/-/g, ""));
+function sampleDates(settings) {
+  const from = toTime(settings.dateFrom);
+  const to = Math.min(toTime(settings.dateTo), from + (MAX_SAMPLE_DAYS - 1) * DAY);
+  const out = [];
+  for (let t = from; t <= to; t += DAY) out.push(toIso(t));
+  return out.length ? out : [settings.dateFrom];
+}
+var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+  return Math.ceil(((t.getTime() - yearStart) / DAY + 1) / 7);
+}
+var HOLIDAYS = /* @__PURE__ */ new Set(["01-01", "05-01", "12-24", "12-25", "12-26", "12-31"]);
+function datePart(iso, part, attributeName) {
+  const d = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const q = Math.floor(m / 3) + 1;
+  switch (part) {
+    case "date":
+      return iso;
+    case "day-of-week":
+      return WEEKDAYS[d.getUTCDay()];
+    case "day-of-month":
+      return d.getUTCDate();
+    case "week":
+      return isoWeek(d);
+    case "month-number":
+      return m + 1;
+    case "month-name":
+      return MONTHS[m];
+    case "quarter":
+      return `Q${q}`;
+    case "year":
+      return y;
+    case "year-month":
+      return iso.slice(0, 7);
+    case "weekend":
+      return d.getUTCDay() === 0 || d.getUTCDay() === 6;
+    case "holiday":
+      return HOLIDAYS.has(iso.slice(5));
+    case "fiscal-year":
+      return y;
+    case "fiscal-period": {
+      const fy = `FY${String(y).slice(2)}`;
+      if (/week/i.test(attributeName)) return `${fy} W${String(isoWeek(d)).padStart(2, "0")}`;
+      if (/quarter/i.test(attributeName)) return `${fy} Q${q}`;
+      return `${fy} P${String(m + 1).padStart(2, "0")}`;
+    }
+  }
+}
+var FIRST = ["Anna", "Jón", "Sara", "Ólafur", "Maria", "David", "Emma", "Lukas", "Sofia", "Noah", "Elena", "Omar", "Ingrid", "Kenji", "Chloe", "Mateo", "Aisha", "Henrik", "Lea", "Tomas"];
+var LAST = ["Jónsdóttir", "Smith", "García", "Müller", "Hansen", "Rossi", "Novak", "Kim", "Silva", "Dubois", "Larsen", "Nowak", "Okafor", "Sato", "Stefánsson", "Brown", "Costa", "Berg", "Ali", "Moreau"];
+var CITIES = ["Reykjavík", "Akureyri", "Oslo", "Copenhagen", "Stockholm", "Berlin", "Amsterdam", "Dublin", "London", "Lisbon", "Madrid", "Paris", "Vienna", "Warsaw", "Prague", "Helsinki"];
+var COUNTRIES = ["Iceland", "Norway", "Denmark", "Sweden", "Germany", "Netherlands", "Ireland", "United Kingdom", "Portugal", "Spain", "France", "Austria"];
+var POOLS = [
+  [/\bcity|town\b/i, CITIES],
+  [/\bcountry|nation\b/i, COUNTRIES],
+  [/\bregion|district|territory|area\b/i, ["North", "South", "East", "West", "Central"]],
+  [/\bsegment\b/i, ["Consumer", "Small business", "Mid-market", "Enterprise"]],
+  [/\bstatus\b/i, ["Active", "Inactive", "Pending", "Closed"]],
+  // Before "band": an age band is ages, not tiers.
+  [/\bage\b/i, ["18–24", "25–34", "35–44", "45–54", "55–64", "65+"]],
+  [/\btier|level|band\b/i, ["Gold", "Silver", "Bronze"]],
+  [/\bchannel\b/i, ["Store", "Online", "Mobile app", "Partner", "Phone"]],
+  [/\bcolou?r\b/i, ["Black", "White", "Red", "Blue", "Green", "Grey"]],
+  [/\bsize\b/i, ["XS", "S", "M", "L", "XL"]],
+  [/\bpriority|urgency\b/i, ["Low", "Medium", "High", "Urgent"]],
+  [/\bbrand\b/i, ["Northwind", "Contoso", "Fabrikam", "Tailspin", "Litware", "Proseware", "Wingtip", "Adventure Works"]],
+  [/\bcategory|class|group|family\b/i, ["Grocery", "Household", "Personal care", "Beverages", "Snacks", "Frozen", "Bakery", "Dairy"]],
+  [/\bdepartment|division|team|unit\b/i, ["Fresh", "Ambient", "Non-food", "Electronics", "Home"]],
+  [/\bformat\b/i, ["Hypermarket", "Supermarket", "Convenience", "Online"]],
+  [/\bindustry|sector\b/i, ["Retail", "Manufacturing", "Healthcare", "Finance", "Education", "Technology", "Logistics"]],
+  [/\bjob|title|role|position|specialty\b/i, ["Cashier", "Store manager", "Shift lead", "Stock clerk", "Sales associate"]],
+  [/\bcurrency\b/i, ["EUR", "USD", "ISK", "GBP", "DKK"]],
+  [/\bcarrier|courier\b/i, ["Póstur", "DHL", "UPS", "FedEx", "Local courier"]],
+  [/\bmode|method\b/i, ["Standard", "Express", "Collect", "Card", "Cash", "Mobile pay"]],
+  [/\bedition|plan\b/i, ["Free", "Starter", "Team", "Business", "Enterprise"]],
+  [/\bperiod|frequency|billing\b/i, ["Monthly", "Quarterly", "Yearly"]],
+  [/\bdecision|outcome|result\b/i, ["Approved", "Denied", "Pending"]],
+  [/\breason|cause\b/i, ["Price", "Quality", "No longer needed", "Moved", "Other"]],
+  [/\btype|kind\b/i, ["Type A", "Type B", "Type C", "Type D"]],
+  [/\bgender|sex\b/i, ["Female", "Male", "Other", "Unknown"]]
+];
+var PRODUCT_ADJ = ["Classic", "Organic", "Fresh", "Premium", "Everyday", "Mini", "Family", "Light"];
+var PRODUCT_NOUN = ["Coffee", "Yoghurt", "Bread", "Pasta", "Shampoo", "Detergent", "Juice", "Cheese", "Crisps", "Tea", "Apples", "Chocolate"];
+var COMPANY_A = ["Nordic", "Atlantic", "Blue", "Summit", "Arctic", "Green", "Silver", "Prime"];
+var COMPANY_B = ["Foods", "Supply", "Trading", "Logistics", "Partners", "Systems", "Group", "Labs"];
+var SITE_SUFFIX = ["Centre", "Mall", "Harbour", "North", "South", "Airport"];
+var SEASONS = ["Spring", "Summer", "Autumn", "Winter", "Weekend", "Holiday", "Back to school", "Flash"];
+var OFFERS = ["sale", "deal", "offer", "discount", "bundle"];
+var PEOPLE = /customer|client|member|patient|subscriber|employee|staff|agent|cashier|person|user|provider|doctor|manager|contact|buyer|seller|rep\b/i;
+var COMPANIES = /supplier|vendor|employer|company|organi[sz]ation|account|partner|carrier|manufacturer|payer|pharmacy/i;
+var SITES = /store|location|branch|site|warehouse|shop|outlet|office|clinic|hospital/i;
+var PRODUCTS = /product|item|sku|article|goods|drug|feature/i;
+var PROMOS = /promotion|campaign|offer|coupon/i;
+function entityName(subject, i, rng) {
+  if (PEOPLE.test(subject) && !COMPANIES.test(subject)) return `${FIRST[(i * 7 + int(rng, 0, 19)) % 20]} ${LAST[(i * 3 + Math.floor(i / 20)) % 20]}`;
+  if (COMPANIES.test(subject)) return `${COMPANY_A[i % 8]} ${COMPANY_B[Math.floor(i / 8) % 8]}${i >= 64 ? ` ${Math.floor(i / 64) + 1}` : ""}`;
+  if (SITES.test(subject)) return `${CITIES[i % CITIES.length]} ${SITE_SUFFIX[Math.floor(i / CITIES.length) % SITE_SUFFIX.length]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
+  if (PRODUCTS.test(subject)) return `${PRODUCT_ADJ[(5 * Math.floor(i / 12) + i) % 8]} ${PRODUCT_NOUN[i % 12]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
+  if (PROMOS.test(subject)) return `${SEASONS[i % 8]} ${OFFERS[Math.floor(i / 8) % 5]}${i >= 40 ? ` ${Math.floor(i / 40) + 1}` : ""}`;
+  return `${subject.replace(/\b\w/g, (c) => c.toUpperCase())} ${i + 1}`;
+}
+function codePrefix(name) {
+  const word = name.split(/[_\s-]+/).find((w) => /[a-z]/i.test(w) && !/^(the|a|an)$/i.test(w)) ?? "ID";
+  return word.slice(0, 3).toUpperCase();
+}
+var pad = (n, width = 5) => String(n).padStart(width, "0");
+function poolFor(attributeName) {
+  return POOLS.find(([re]) => re.test(attributeName))?.[1];
+}
+function attributeValue(col, table, i, rng, level) {
+  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
+  const name = attribute?.name ?? col.name.replace(/_/g, " ");
+  const samples = attribute?.sampleValues;
+  if (samples?.length) {
+    const nameLike = /name|description|title/i.test(name);
+    const raw = level !== void 0 ? samples[level % samples.length] : nameLike ? samples[i % samples.length] : choose(rng, samples);
+    return typed(raw, col.dataType);
+  }
+  switch (col.dataType) {
+    case "boolean":
+      return rng() < 0.3;
+    case "date":
+      return toIso(toTime("2015-01-01") + int(rng, 0, 3650) * DAY);
+    case "integer":
+      return /year/i.test(name) ? int(rng, 2010, 2025) : /age/i.test(name) ? int(rng, 18, 90) : int(rng, 1, 100);
+    case "decimal":
+      return /lat/i.test(name) ? round2(40 + rng() * 25, 5) : /lon|lng/i.test(name) ? round2(-25 + rng() * 45, 5) : round2(rng() * 100, 2);
+    case "text":
+      break;
+  }
+  if (/e-?mail/i.test(name)) return `${FIRST[i % 20].toLowerCase()}.${pad(i + 1, 4)}@example.com`.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  if (/phone|mobile/i.test(name)) return `+354 555 ${pad(int(rng, 0, 9999), 4)}`;
+  if (/(^|\s)(name|description|title)$/i.test(name) || name.toLowerCase() === table.label.toLowerCase()) {
+    return entityName(`${table.label} ${name}`, i, rng);
+  }
+  if (/\b(id|code|number|no|sku|npi|ndc)\b/i.test(name)) return `${codePrefix(name)}-${pad(i + 1)}`;
+  const pool = poolFor(name);
+  if (pool) {
+    if (level === void 0) return choose(rng, pool);
+    return level < pool.length ? pool[level] : `${pool[level % pool.length]} ${Math.floor(level / pool.length) + 1}`;
+  }
+  const letter = level ?? int(rng, 0, 4);
+  return `${name.replace(/\b\w/, (c) => c.toUpperCase())} ${String.fromCharCode(65 + letter % 26)}${letter >= 26 ? Math.floor(letter / 26) : ""}`;
+}
+function typed(raw, dataType) {
+  if (dataType === "integer" || dataType === "decimal") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (dataType === "boolean") return /^(true|yes|y|1|ja|já)$/i.test(raw.trim());
+  return raw;
+}
+function hierarchyLevels(table, project) {
+  const dim = project.dimensions.find((d) => d.id === table.sourceId);
+  if (!dim) return [];
+  const out = [];
+  for (const h of dim.hierarchies) {
+    const levels = h.split(/\s*(?:→|->|>|\/|\|)\s*/).map((l) => l.trim().toLowerCase()).filter(Boolean);
+    const cols = levels.map(
+      (level) => table.columns.find(
+        (c) => c.role === "attribute" && c.source.kind === "attribute" && !c.source.attribute.sampleValues?.length && (c.source.attribute.name.trim().toLowerCase() === level || c.name === level.replace(/\s+/g, "_"))
+      )
+    ).filter((c) => !!c);
+    if (cols.length >= 2) out.push(cols);
+  }
+  return out;
+}
+function planHierarchy(cols) {
+  const poolSize = (c) => poolFor(c.source.kind === "attribute" ? c.source.attribute.name : c.name)?.length;
+  const top = cols.length - 1;
+  let size = Math.min(4, poolSize(cols[top]) ?? 4);
+  const fanout = new Array(cols.length).fill(1);
+  for (let li = top - 1; li >= 0; li--) {
+    fanout[li] = Math.max(1, Math.floor((poolSize(cols[li]) ?? size * 3) / size));
+    size *= fanout[li];
+  }
+  return { cols, leaves: size, fanout };
+}
+function hierarchyPositions(plans, rng) {
+  const out = /* @__PURE__ */ new Map();
+  for (const plan of plans) {
+    let index = int(rng, 0, plan.leaves - 1);
+    plan.cols.forEach((c, li) => {
+      out.set(c.name, index);
+      index = Math.floor(index / plan.fanout[li]);
+    });
+  }
+  return out;
+}
+function defaultRows(table) {
+  if (table.kind === "fact") {
+    return table.factTableType === "accumulating-snapshot" ? 500 : DEFAULT_FACT_ROWS;
+  }
+  const subject = `${table.label}`;
+  if (PEOPLE.test(subject)) return 200;
+  if (PRODUCTS.test(subject)) return 120;
+  if (SITES.test(subject) || COMPANIES.test(subject)) return 30;
+  if (table.columns.length <= 3) return 8;
+  return 25;
+}
+function junkValues(col, table, rng) {
+  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
+  if (attribute?.sampleValues?.length) return [...new Set(attribute.sampleValues.map((v) => typed(v, col.dataType)))];
+  if (col.dataType === "boolean") return [false, true];
+  if (col.dataType === "integer" || col.dataType === "decimal") return [1, 2, 3, 4, 5];
+  if (col.dataType === "date") return ["2025-01-01", "2025-07-01"];
+  const pool = poolFor(attribute?.name ?? col.name);
+  if (pool) return pool.slice(0, 6);
+  return [...new Set(Array.from({ length: 5 }, (_, i) => attributeValue(col, table, i, rng, i)))];
+}
+function junkTable(table, settings) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const attrs = table.columns.filter((c) => c.role === "attribute");
+  const domains = attrs.map((c) => junkValues(c, table, rng));
+  const combinations = domains.reduce((n2, d) => n2 * Math.max(1, d.length), 1);
+  const n = Math.min(rowCount(table, settings), combinations);
+  const picked = /* @__PURE__ */ new Set();
+  if (combinations <= 5e3) {
+    const all = Array.from({ length: combinations }, (_, i) => i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    all.slice(0, n).forEach((i) => picked.add(i));
+  } else {
+    while (picked.size < n) picked.add(Math.floor(rng() * combinations));
+  }
+  const rows = [];
+  let key = 0;
+  for (let combo of picked) {
+    key += 1;
+    const values = /* @__PURE__ */ new Map();
+    attrs.forEach((c, i) => {
+      const d = domains[i];
+      values.set(c.name, d.length ? d[combo % d.length] : null);
+      combo = Math.floor(combo / Math.max(1, d.length));
+    });
+    rows.push(table.columns.map((c) => c.role === "surrogate-key" ? key : values.get(c.name) ?? null));
+  }
+  return {
+    table: { name: table.name, columns: table.columns.map((c) => c.name), rows },
+    members: rows.map((r) => [{ key: r[0], from: "0000-01-01", to: FAR_FUTURE }])
+  };
+}
+function rowCount(table, settings) {
+  return settings.rows[table.sourceId] ?? defaultRows(table);
+}
+function calendarTable(table, dates) {
+  const rows = dates.map(
+    (iso) => table.columns.map((c) => {
+      if (c.role === "surrogate-key") return dateKey(iso);
+      if (c.source.kind === "generated" && c.source.purpose === "full-date") return iso;
+      if (c.source.kind === "date-part") return datePart(iso, c.source.part, c.name);
+      if (c.source.kind === "attribute") {
+        const a = c.source.attribute;
+        if (a.sampleValues?.length) return typed(a.sampleValues[dateKey(iso) % a.sampleValues.length], c.dataType);
+        return c.dataType === "date" ? iso : c.dataType === "boolean" ? false : `${a.name} ${iso.slice(0, 7)}`;
+      }
+      return null;
+    })
+  );
+  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members: dates.map((iso) => [{ key: dateKey(iso), from: iso, to: iso }]) };
+}
+function memberTable(table, project, settings, dates) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const n = rowCount(table, settings);
+  const hierarchies = hierarchyLevels(table, project);
+  const historyCols = new Set(
+    table.columns.filter((c) => c.source.kind === "attribute" && c.source.attribute.scdType === 2).map((c) => c.name)
+  );
+  const rows = [];
+  const members = [];
+  let key = 0;
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const plans = hierarchies.map(planHierarchy);
+  const movesWithHistory = new Set(hierarchies.filter((cols) => cols.some((c) => historyCols.has(c.name))).flat().map((c) => c.name));
+  for (let i = 0; i < n; i++) {
+    const levelOf = hierarchyPositions(plans, rng);
+    const base = table.columns.map((c) => {
+      if (c.role === "business-key") {
+        if (c.source.kind === "attribute" && c.source.attribute.sampleValues?.length && n <= c.source.attribute.sampleValues.length) {
+          return c.source.attribute.sampleValues[i];
+        }
+        return `${codePrefix(c.source.kind === "attribute" ? c.source.attribute.name : table.label)}-${pad(i + 1)}`;
+      }
+      if (c.role === "attribute") {
+        if (c.source.kind === "generated") return entityName(table.label, i, rng);
+        return attributeValue(c, table, i, rng, levelOf.get(c.name));
+      }
+      return null;
+    });
+    const versions = [];
+    const changes = table.scd2 && historyCols.size > 0 && dates.length > 2 && rng() < 0.25;
+    const changeAt = changes ? dates[int(rng, 1, dates.length - 1)] : null;
+    const spans = changeAt ? [
+      [first, toIso(toTime(changeAt) - DAY), false],
+      [changeAt, FAR_FUTURE, true]
+    ] : [[first, FAR_FUTURE, true]];
+    spans.forEach(([from, to, current], vi) => {
+      key += 1;
+      const moved = vi > 0 ? hierarchyPositions(plans, rng) : null;
+      const row = table.columns.map((c, ci) => {
+        if (moved && movesWithHistory.has(c.name)) return attributeValue(c, table, i, rng, moved.get(c.name));
+        if (c.role === "surrogate-key") return key;
+        if (c.source.kind === "generated" && c.source.purpose === "effective-from") return from;
+        if (c.source.kind === "generated" && c.source.purpose === "effective-to") return to;
+        if (c.source.kind === "generated" && c.source.purpose === "current") return current;
+        if (c.source.kind === "generated" && c.source.purpose === "prior") return null;
+        if (vi > 0 && historyCols.has(c.name)) {
+          let v = attributeValue(c, table, i, rng);
+          for (let tries = 0; tries < 4 && v === base[ci]; tries++) v = attributeValue(c, table, i, rng);
+          return v;
+        }
+        return base[ci] ?? null;
+      });
+      rows.push(row);
+      versions.push({ key, from, to: to === FAR_FUTURE ? last : to });
+    });
+    members.push(versions);
+  }
+  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members };
+}
+function versionAt(versions, iso) {
+  return (versions.find((v) => v.from <= iso && iso <= v.to) ?? versions[versions.length - 1]).key;
+}
+function measureValue(col, rng, quantity, price) {
+  const m = col.source.kind === "measure" ? col.source.measure : void 0;
+  const name = `${m?.name ?? col.name} ${m?.unit ?? ""}`.toLowerCase();
+  const integer = col.dataType === "integer";
+  if (m?.sampleRange) {
+    const [lo, hi] = m.sampleRange;
+    return integer ? int(rng, Math.ceil(lo), Math.floor(hi)) : round2(lo + rng() * (hi - lo), 2);
+  }
+  const semi = col.additivity === "semi-additive";
+  if (/%|percent|pct|ratio|rate|share/.test(name)) return round2(rng(), 4);
+  if (/lag|duration|time to|hours|minutes|seconds/.test(name)) return integer ? int(rng, 1, 120) : round2(0.5 + rng() * 72, 2);
+  if (integer) {
+    if (/quantity|units|qty/.test(name)) return semi ? int(rng, 0, 500) : quantity;
+    if (/days/.test(name)) return int(rng, 0, 30);
+    if (/seats|users|members|months/.test(name)) return semi ? int(rng, 1, 250) : int(rng, -3, 12);
+    if (/count|events|views|clicks|sessions/.test(name)) return int(rng, 0, 50);
+    return int(rng, 1, 20);
+  }
+  if (/change|delta|difference/.test(name)) return round2((rng() < 0.3 ? -1 : 1) * (10 + rng() * 300), 2);
+  if (semi || /balance|mrr|premium|value at|on hand/.test(name)) return round2(200 + rng() * 2e4, 2);
+  const base = quantity * price;
+  const share = (lo, hi) => round2(base * (lo + rng() * (hi - lo)), 2);
+  if (/discount|rebate|reduction|markdown/.test(name)) return rng() < 0.6 ? 0 : share(0.05, 0.25);
+  if (/tax|vat/.test(name)) return share(0.1, 0.24);
+  if (/cost/.test(name)) return share(0.55, 0.75);
+  if (/margin|profit/.test(name)) return share(0.15, 0.4);
+  if (/unit price|price/.test(name)) return round2(price, 2);
+  if (/allowed/.test(name)) return share(0.7, 0.95);
+  if (/paid/.test(name)) return share(0.5, 0.85);
+  if (/responsibility|copay|deductible/.test(name)) return share(0.05, 0.2);
+  return round2(base, 2);
+}
+function factData(table, model, dims, settings, dates) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const n = rowCount(table, settings);
+  const calendar = new Set(model.tables.filter((t) => t.calendar).map((t) => t.name));
+  const monthEnds = dates.filter((iso, i) => i === dates.length - 1 || dates[i + 1].slice(5, 7) !== iso.slice(5, 7));
+  const rows = [];
+  let group = 0;
+  for (let r = 0; r < n; r++) {
+    const snapshot = table.factTableType === "periodic-snapshot";
+    let dayIndex = snapshot ? dates.indexOf(choose(rng, monthEnds)) : int(rng, 0, dates.length - 1);
+    const baseDate = dates[dayIndex];
+    const quantity = 1 + Math.floor(Math.pow(rng(), 2) * 8);
+    const price = 2 + Math.pow(rng(), 2) * 150;
+    if (r === 0 || rng() < 0.4) group += 1;
+    let firstDate = true;
+    const row = table.columns.map((c) => {
+      if (c.role === "foreign-key" && c.references) {
+        if (calendar.has(c.references.table)) {
+          if (!firstDate) dayIndex = Math.min(dates.length - 1, dayIndex + int(rng, 0, 6));
+          firstDate = false;
+          return dateKey(dates[dayIndex]);
+        }
+        const dim = dims.get(c.references.table);
+        if (!dim || dim.members.length === 0) return null;
+        return versionAt(dim.members[skewed(rng, dim.members.length)], baseDate);
+      }
+      if (c.role === "degenerate") {
+        const id2 = table.factTableType === "transaction" ? group : r + 1;
+        return `${codePrefix(c.name)}-${pad(id2, 6)}`;
+      }
+      if (c.role === "measure") return measureValue(c, rng, quantity, price);
+      return null;
+    });
+    rows.push(row);
+  }
+  return { name: table.name, columns: table.columns.map((c) => c.name), rows };
+}
+function generateSampleData(project, model = physicalModel(project), settings = physicalSettings(project)) {
+  const dates = sampleDates(settings);
+  const dims = /* @__PURE__ */ new Map();
+  for (const t of model.tables.filter((x) => x.kind === "dimension")) {
+    dims.set(t.name, t.calendar ? calendarTable(t, dates) : t.junk ? junkTable(t, settings) : memberTable(t, project, settings, dates));
+  }
+  const tables = {};
+  for (const [name, d] of dims) tables[name] = d.table;
+  for (const t of model.tables.filter((x) => x.kind === "fact")) tables[t.name] = factData(t, model, dims, settings, dates);
+  return { settings, tables };
+}
+function sqlLiteral(value, dialect) {
+  if (value === null) return "NULL";
+  if (typeof value === "boolean") return dialect === "sqlserver" ? value ? "1" : "0" : value ? "TRUE" : "FALSE";
+  if (typeof value === "number") return String(value);
+  const text = value.replace(/'/g, "''");
+  return dialect === "sqlserver" ? `N'${text}'` : `'${text}'`;
+}
+function seedScript(project, dataset, dialect, model = physicalModel(project)) {
+  const out = [
+    `-- ${displayName(project.meta, "Untitled project")}: sample data (made up, not real) for ${dialect === "postgres" ? "PostgreSQL" : dialect === "sqlserver" ? "SQL Server" : "Snowflake"}`,
+    `-- Seed ${dataset.settings.seed}, dates ${dataset.settings.dateFrom} to ${dataset.settings.dateTo}. Run after the CREATE TABLE script.`
+  ];
+  const batch = 500;
+  for (const t of [...model.tables.filter((x) => x.kind === "dimension"), ...model.tables.filter((x) => x.kind === "fact")]) {
+    const data = dataset.tables[t.name];
+    if (!data || data.rows.length === 0) continue;
+    const identity = t.kind === "dimension" && !t.calendar;
+    out.push("", `-- ${t.name}: ${data.rows.length} rows`);
+    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} ON;`);
+    for (let i = 0; i < data.rows.length; i += batch) {
+      const rows = data.rows.slice(i, i + batch).map((row) => `  (${row.map((v) => sqlLiteral(v, dialect)).join(", ")})`);
+      out.push(`INSERT INTO ${t.name} (${data.columns.join(", ")}) VALUES
+${rows.join(",\n")};`);
+    }
+    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} OFF;`);
+    if (identity && dialect === "postgres" && t.keyColumn) {
+      out.push(`SELECT setval(pg_get_serial_sequence('${t.name}', '${t.keyColumn}'), (SELECT max(${t.keyColumn}) FROM ${t.name}));`);
+    }
+  }
+  return out.join("\n") + "\n";
+}
+function tableToCsv(table) {
+  const cell = (v) => v === null ? "" : typeof v === "string" ? csvCell(v) : String(v);
+  return "\uFEFF" + [table.columns.join(","), ...table.rows.map((r) => r.map(cell).join(","))].join("\r\n") + "\r\n";
+}
+
+// src/core/explore.ts
+var dimensionOf = (model, fk) => model.tables.find((t) => t.name === fk.references?.table);
+var PREFERRED_DATE = ["year-month", "month-name", "quarter", "year", "fiscal-period", "day-of-week"];
+var LOW_CARDINALITY = /category|segment|region|type|brand|channel|class|group|tier|department|format|status|country|specialty|plan|edition|industry|band/;
+function preferredAttribute(dim) {
+  const attrs = dim.columns.filter((c) => c.role === "attribute" || c.role === "business-key");
+  if (dim.calendar) {
+    for (const part of PREFERRED_DATE) {
+      const hit = attrs.find((c) => c.source.kind === "date-part" && c.source.part === part);
+      if (hit) return hit.name;
+    }
+  }
+  return attrs.find((c) => c.role === "attribute" && c.dataType === "text" && LOW_CARDINALITY.test(c.name))?.name ?? attrs.find((c) => c.role === "attribute" && c.dataType === "text")?.name ?? attrs[0]?.name;
+}
+function defaultAggregate(additivity) {
+  return additivity === void 0 ? "count" : additivity === "additive" ? "sum" : "avg";
+}
+var HEADLINE = [/net_.*amount|sales_amount|revenue|mrr|invoice_amount|billed|paid_amount/, /amount|value/];
+function defaultQuery(model, fact) {
+  const measures = fact.columns.filter((c) => c.role === "measure");
+  const additive = measures.filter((m) => m.additivity === "additive");
+  const measure = HEADLINE.map((re) => additive.find((m) => re.test(m.name))).find(Boolean) ?? additive[0] ?? measures[0];
+  const fks = fact.columns.filter((c) => c.role === "foreign-key");
+  const nonDate = fks.find((c) => !dimensionOf(model, c)?.calendar) ?? fks[0];
+  const groupBy = [];
+  const dim = nonDate && dimensionOf(model, nonDate);
+  const attribute = dim && preferredAttribute(dim);
+  if (nonDate && attribute) groupBy.push({ column: nonDate.name, attribute });
+  return { fact: fact.name, measure: measure?.name ?? null, aggregate: defaultAggregate(measure?.additivity), groupBy, limit: 20 };
+}
+var RESERVED_ALIASES = /* @__PURE__ */ new Set(["as", "at", "by", "do", "f", "if", "in", "is", "of", "on", "or", "to"]);
+function aliasFor(column, used) {
+  const base = column.replace(/_key$/, "").split("_").filter(Boolean).map((w) => w[0]).join("") || "d";
+  let alias = base;
+  for (let n = 2; used.has(alias) || RESERVED_ALIASES.has(alias); n++) alias = `${base}${n}`;
+  used.add(alias);
+  return alias;
+}
+function querySql(model, query, dialect) {
+  const fact = model.tables.find((t) => t.name === query.fact);
+  if (!fact) return "";
+  const used = /* @__PURE__ */ new Set(["f"]);
+  const joins = /* @__PURE__ */ new Map();
+  const ref = (g) => {
+    if (!g.attribute) return `f.${g.column}`;
+    let j = joins.get(g.column);
+    if (!j) {
+      const fk = fact.columns.find((c) => c.name === g.column);
+      j = { alias: aliasFor(g.column, used), dim: dimensionOf(model, fk), fk };
+      joins.set(g.column, j);
+    }
+    return `${j.alias}.${g.attribute}`;
+  };
+  const groups = query.groupBy.map(ref);
+  const filter = query.filter ? `${ref(query.filter.by)} = ${sqlLiteral(query.filter.value, dialect)}` : null;
+  const measure = fact.columns.find((c) => c.name === query.measure);
+  const valueAlias = measure && query.aggregate !== "count" ? `${query.aggregate}_${measure.name}` : "row_count";
+  let value = "COUNT(*)";
+  if (measure && query.aggregate !== "count") {
+    const arg = dialect === "sqlserver" && query.aggregate === "avg" && measure.dataType === "integer" ? `CAST(f.${measure.name} AS decimal(18,4))` : `f.${measure.name}`;
+    value = `${query.aggregate.toUpperCase()}(${arg})`;
+  }
+  const limit = query.limit ?? 20;
+  const select = [...groups, `${value} AS ${valueAlias}`];
+  const lines = [`SELECT${dialect === "sqlserver" ? ` TOP (${limit})` : ""}`, `  ${select.join(",\n  ")}`, `FROM ${fact.name} AS f`];
+  for (const j of joins.values()) lines.push(`JOIN ${j.dim.name} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
+  if (filter) lines.push(`WHERE ${filter}`);
+  if (groups.length) lines.push(`GROUP BY ${groups.join(", ")}`);
+  lines.push(`ORDER BY ${valueAlias} DESC`);
+  if (dialect !== "sqlserver") lines.push(`LIMIT ${limit}`);
+  return lines.join("\n") + ";";
+}
+
+// src/core/prototype.ts
+var SANDBOX_PORT = 5433;
+var POSTGRES_IMAGE = "postgres:17-alpine";
+function compose(project) {
+  const name = `kimball-${slugify(project.meta.name, "project")}`.slice(0, 50).replace(/-+$/, "");
+  return [
+    `# ${displayName(project.meta, "Untitled project")}: Kimball Designer prototype sandbox.`,
+    "# PostgreSQL with the star schema and the sample data, loaded from ./initdb on first start.",
+    "#   Start:    docker compose up -d",
+    `#   Query:    docker compose exec db psql -U kimball -d kimball`,
+    `#   Connect:  host 127.0.0.1, port ${SANDBOX_PORT}, database kimball, user kimball (no password)`,
+    "#   Reset:    docker compose down -v   (then up again to reload the scripts)",
+    `name: ${name}`,
+    "services:",
+    "  db:",
+    `    image: ${POSTGRES_IMAGE}`,
+    "    environment:",
+    "      POSTGRES_DB: kimball",
+    "      POSTGRES_USER: kimball",
+    "      # A local sandbox with made-up data: no password, and the port only listens on this computer.",
+    "      POSTGRES_HOST_AUTH_METHOD: trust",
+    "    ports:",
+    `      - "127.0.0.1:${SANDBOX_PORT}:5432"`,
+    "    volumes:",
+    "      - ./initdb:/docker-entrypoint-initdb.d:ro",
+    "    healthcheck:",
+    '      test: ["CMD-SHELL", "pg_isready -U kimball -d kimball"]',
+    "      interval: 5s",
+    "      retries: 20",
+    ""
+  ].join("\n");
+}
+function exampleQueries(project, dialect) {
+  const model = physicalModel(project);
+  const out = [`-- Example queries for ${displayName(project.meta, "Untitled project")} (${optionLabel(SQL_DIALECTS, dialect)}).`, "-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements."];
+  for (const fact of model.tables.filter((t) => t.kind === "fact")) {
+    const q = defaultQuery(model, fact);
+    out.push("", `-- ${fact.label}${fact.grain ? `: ${fact.grain}` : ""}`, querySql(model, q, dialect));
+    const dateFk = fact.columns.find((c) => c.role === "foreign-key" && model.tables.find((t) => t.name === c.references?.table)?.calendar);
+    const dim = dateFk && model.tables.find((t) => t.name === dateFk.references?.table);
+    const period = dim && preferredAttribute(dim);
+    if (dateFk && period) {
+      out.push("", `-- ${fact.label} by ${period.replace(/_/g, " ")}`, querySql(model, { ...q, groupBy: [{ column: dateFk.name, attribute: period }] }, dialect));
+    }
+  }
+  return out.join("\n") + "\n";
+}
+function readme(project, settings, tableCount) {
+  const dialect = optionLabel(SQL_DIALECTS, settings.dialect);
+  return `# ${displayName(project.meta, "Untitled project")}: prototype
+
+Generated by Kimball Designer ${APP_VERSION}. The tables follow your high-level design; the rows are **made-up sample data** (seed ${settings.seed}, dates ${settings.dateFrom} to ${settings.dateTo}) so you can see how the design answers questions before you build it.
+
+## Start the sandbox
+
+You need Docker (Docker Desktop on Windows and macOS).
+
+\`\`\`bash
+docker compose up -d
+docker compose exec db psql -U kimball -d kimball
+\`\`\`
+
+PostgreSQL loads \`initdb/01-schema.sql\` and \`initdb/02-data.sql\` the first time it starts (${tableCount} tables). Any SQL client works too: host \`127.0.0.1\`, port \`${SANDBOX_PORT}\`, database and user \`kimball\`, no password. The port only listens on this computer.
+
+Try the queries in \`queries.sql\`, for example:
+
+\`\`\`bash
+docker compose exec -T db psql -U kimball -d kimball < queries.sql
+\`\`\`
+
+To start again after changing the design, write a new bundle and run \`docker compose down -v\`, then \`docker compose up -d\`.
+
+## Files
+
+| File | What |
+|---|---|
+| \`docker-compose.yml\` | PostgreSQL ${POSTGRES_IMAGE.split(":")[1]} sandbox |
+| \`initdb/01-schema.sql\` | CREATE TABLE script and indexes for PostgreSQL (loaded by the sandbox) |
+| \`initdb/02-data.sql\` | The sample rows as INSERT statements |
+| \`schema.sql\` | CREATE TABLE script for ${dialect}, your target platform |
+| \`index-recommendations.md\` | Which keys and indexes to create, now and later, and why |
+| \`queries.sql\` | Example star-join queries |
+| \`data/*.csv\` | The sample rows as CSV, to load anywhere |
+
+## Before you build for real
+
+- The script is a starting point for the detailed design: review names, data types, text lengths and business keys.
+- Columns marked *added* in the comments are not in the design (a business key or a name column); keep or change them.
+- Plan an *Unknown* row (key -1 or 0) in each dimension so facts never need a null key.
+`;
+}
+function prototypeFiles(project, settings = physicalSettings(project)) {
+  const model = physicalModel(project);
+  const dataset = generateSampleData(project, model, settings);
+  const files = [
+    { name: "README.md", data: readme(project, settings, model.tables.length) },
+    { name: "docker-compose.yml", data: compose(project) },
+    { name: "initdb/01-schema.sql", data: ddlScript(project, { dialect: "postgres", model }) },
+    { name: "initdb/02-data.sql", data: seedScript(project, dataset, "postgres", model) },
+    { name: "schema.sql", data: ddlScript(project, { dialect: settings.dialect, model }) },
+    { name: "index-recommendations.md", data: indexAdviceToMarkdown(project, settings.dialect, model) },
+    { name: "queries.sql", data: exampleQueries(project, settings.dialect) }
+  ];
+  if (settings.dialect !== "postgres") files.push({ name: `data.${settings.dialect}.sql`, data: seedScript(project, dataset, settings.dialect, model) });
+  for (const t of model.tables) {
+    const table = dataset.tables[t.name];
+    if (table) files.push({ name: `data/${t.name}.csv`, data: tableToCsv(table) });
+  }
+  return files;
+}
 
 // src/cli/io.ts
 import { existsSync } from "node:fs";
@@ -2327,9 +3778,10 @@ import { dirname } from "node:path";
 async function readProject(file) {
   return parseProject(await readFile(file, "utf8"));
 }
+var tmpCounter = 0;
 async function writeFileAtomic(file, text) {
   await mkdir(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}-${(tmpCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   await writeFile(tmp, text, "utf8");
   try {
     await rename(tmp, file);
@@ -2363,7 +3815,7 @@ function startServer(options) {
   const log = options.log ?? (() => {
   });
   let port = options.port ?? DEFAULT_PORT;
-  const allowedHosts = () => /* @__PURE__ */ new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+  const allowedHosts = () => new Set(["127.0.0.1", "localhost", "[::1]"].flatMap((h) => port === 80 ? [`${h}:${port}`, h] : [`${h}:${port}`]));
   const allowedOrigins = () => new Set([...allowedHosts()].map((h) => `http://${h}`));
   const send = (res, status2, body, type = "application/json; charset=utf-8", extra = {}) => {
     res.writeHead(status2, {
@@ -2381,14 +3833,19 @@ function startServer(options) {
     let size = 0;
     req.on("data", (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
-        fail(new Error("too-large"));
-        req.destroy();
-      } else chunks.push(c);
+      if (size <= MAX_BODY) chunks.push(c);
     });
-    req.on("end", () => ok(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => ok(size > MAX_BODY ? null : Buffer.concat(chunks).toString("utf8")));
     req.on("error", fail);
   });
+  const readConsistent = async () => {
+    for (let attempt = 0; ; attempt++) {
+      const before = await mtimeMs(file);
+      const text = await readFile2(file, "utf8");
+      const after = await mtimeMs(file);
+      if (before === after || attempt >= 4) return { text, mtime: after };
+    }
+  };
   const handle = async (req, res) => {
     if (!allowedHosts().has(req.headers.host ?? "")) return json(res, 403, { error: "Forbidden host" });
     const origin = req.headers.origin;
@@ -2407,24 +3864,21 @@ function startServer(options) {
       }
       case "GET /api/project": {
         if (!existsSync2(file)) return json(res, 404, { error: "Project file does not exist yet", file });
-        const [text, m] = await Promise.all([readFile2(file, "utf8"), mtimeMs(file)]);
+        const { text, mtime: m } = await readConsistent();
         try {
-          JSON.parse(text.replace(/^﻿/, ""));
+          normalizeProject(JSON.parse(text.replace(/^﻿/, "")));
         } catch (e) {
-          return json(res, 422, { error: `Project file is not valid JSON: ${e.message}`, mtimeMs: m });
+          const reason = e instanceof ProjectParseError ? e.message : `Project file is not valid JSON: ${e.message}`;
+          return json(res, 422, { error: reason, mtimeMs: m });
         }
         return send(res, 200, text, void 0, { "X-Kimball-Mtime": String(m) });
       }
       case "PUT /api/project": {
-        if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
+        if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
           return json(res, 415, { error: "Content-Type must be application/json" });
         }
-        let body;
-        try {
-          body = await readBody(req);
-        } catch {
-          return json(res, 413, { error: "Project is larger than 5 MB" });
-        }
+        const body = await readBody(req);
+        if (body === null) return json(res, 413, { error: "Project is larger than 5 MB" });
         const base = Number(req.headers[BASE_MTIME_HEADER]);
         const current = await mtimeMs(file);
         if (current !== null && Number.isFinite(base) && base > 0 && Math.abs(current - base) > 1) {
@@ -2487,6 +3941,15 @@ Commands
   render <file>      Write deliverables (requirements.md, bus matrix, bubble diagrams)
       --out <dir>        Output folder (default: <file folder>/out)
       --theme <name>     light (default) or dark
+  ddl <file>         Print the CREATE TABLE script with keys and index advice
+      --dialect <name>   postgres (default), sqlserver or snowflake
+      --out <file>       Write to a file instead
+      --drop             Start with DROP TABLE IF EXISTS
+  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV
+      --out <dir>        Output folder (default: <file folder>/prototype)
+      --dialect <name>   Target platform for schema.sql
+      --seed <n>         Seed for the sample data
+      --rows <n>         Sample rows per fact table
   serve [file]       Open the guided UI on the project file with live sync
       --port <n>         Port (default ${DEFAULT_PORT})
       --open             Open the browser
@@ -2511,6 +3974,10 @@ async function runCli(argv, io) {
         theme: { type: "string" },
         port: { type: "string" },
         open: { type: "boolean" },
+        dialect: { type: "string" },
+        drop: { type: "boolean" },
+        seed: { type: "string" },
+        rows: { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" }
       }
@@ -2534,6 +4001,18 @@ Run "kimball --help" for usage.
   }
   const file = resolve2(io.cwd, fileArg ?? DEFAULT_FILE);
   const rel = (p) => relative(io.cwd, p) || ".";
+  const dialectOption = (fallback) => {
+    if (!opts.dialect) return fallback;
+    const match = SQL_DIALECTS.find((d) => d.value === opts.dialect || d.label.toLowerCase() === opts.dialect.toLowerCase());
+    if (!match) throw new CliError(`Unknown dialect "${opts.dialect}". Choose one of: ${SQL_DIALECTS.map((d) => d.value).join(", ")}.`);
+    return match.value;
+  };
+  const positiveInt = (name, value) => {
+    if (value === void 0) return void 0;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) throw new CliError(`--${name} must be a whole number, got "${value}".`);
+    return n;
+  };
   const load = async () => {
     if (!existsSync3(file)) throw new CliError(`No project file at ${rel(file)}. Create one with "kimball init ${rel(file)}".`);
     return readProject(file);
@@ -2611,7 +4090,51 @@ ${written.map((w) => `  ${w}`).join("\n")}
         }
         return 0;
       }
+      case "ddl": {
+        const project = await load();
+        const sql = ddlScript(project, { dialect: dialectOption(physicalSettings(project).dialect), dropFirst: opts.drop });
+        if (opts.out) {
+          const target = resolve2(io.cwd, opts.out);
+          await writeFileAtomic(target, sql);
+          io.out(`Wrote ${rel(target)}.
+`);
+        } else {
+          io.out(sql);
+        }
+        return 0;
+      }
+      case "prototype": {
+        const project = await load();
+        const base = physicalSettings(project);
+        const seed = positiveInt("seed", opts.seed);
+        const rows = positiveInt("rows", opts.rows);
+        const settings = {
+          ...base,
+          dialect: dialectOption(base.dialect),
+          seed: seed ?? base.seed,
+          rows: { ...base.rows }
+        };
+        if (rows !== void 0) {
+          if (rows < 1) throw new CliError("--rows must be at least 1.");
+          for (const p of project.processes) settings.rows[p.id] = Math.min(rows, 1e5);
+        }
+        const outDir = resolve2(io.cwd, opts.out ?? join(file, "..", "prototype"));
+        const files = prototypeFiles(project, settings);
+        for (const f of files) await writeFileAtomic(join(outDir, f.name), f.data);
+        io.out(`Wrote the prototype (${files.length} files) to ${rel(outDir)}.
+`);
+        io.out(`Start the PostgreSQL sandbox (needs Docker):
+  cd ${rel(outDir)}
+  docker compose up -d
+  docker compose exec db psql -U kimball -d kimball
+`);
+        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect).label}; index advice is in index-recommendations.md.
+`);
+        return 0;
+      }
       case "serve": {
+        const port = opts.port ? Number(opts.port) : DEFAULT_PORT;
+        if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError(`Invalid port "${opts.port}".`);
         if (!existsSync3(file)) {
           await writeProject(file, createProject(opts.name ?? ""));
           io.out(`Created ${rel(file)}.
@@ -2619,8 +4142,6 @@ ${written.map((w) => `  ${w}`).join("\n")}
         } else {
           await readProject(file);
         }
-        const port = opts.port ? Number(opts.port) : DEFAULT_PORT;
-        if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError(`Invalid port "${opts.port}".`);
         const server = await startServer({
           file,
           port,

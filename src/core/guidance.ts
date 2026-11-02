@@ -217,7 +217,7 @@ export const GUIDANCE: Record<PhaseId, PhaseGuidance> = {
     tips: [
       'Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.',
       'Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.',
-      'Download the sandbox bundle and run `docker compose up -d` to query the same tables with any SQL tool.',
+      'Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.',
       'Treat the script as a starting point: review data types, text lengths and business keys before you build.',
     ],
     pitfalls: [

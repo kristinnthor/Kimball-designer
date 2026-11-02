@@ -31,9 +31,25 @@ All notable changes to this project are documented here. The format follows [Kee
 - Guided demos with a step-by-step demo bar that ticks off steps as you do them: tour a finished model, model your first business process, share the results, work with Claude (#46).
 - User guide (`docs/USER-GUIDE.md`) and skill reference (`references/user-guide.md`) generated from the same help content by `npm run build:docs`; a test fails if they are stale (#47).
 
+- Phase 11 *Prototype* in a new *Build* stage: the design becomes a physical star schema (surrogate and business keys, type 2/3 history columns, a foreign key per role, degenerate dimensions as fact columns) filled with seeded sample data; an explorer groups facts by any dimension attribute, warns when a semi- or non-additive fact is summed, and shows the matching SQL; a table browser shows columns and sample rows and lets you set data types, business keys and sample values per attribute (#52).
+- CREATE TABLE scripts for PostgreSQL, SQL Server and Snowflake with keys, constraints and index recommendations (FK indexes, business-key uniqueness, columnstore, BRIN, partitioning, clustering, grain uniqueness), each with its reason; `kimball ddl` (#53).
+- A Docker Compose PostgreSQL sandbox with the tables and sample data loaded on first start, plus scripts, CSVs, example queries and index recommendations: download it from the UI or write it with `kimball prototype` (#52).
+- The skill guides Claude through the prototype: suggest realistic sample values, business keys and data types for the user's domain, generate the bundle, start the sandbox and answer requirements with SQL (`references/prototype-guide.md`) (#52).
+- Optional project-file fields: `physical` (dialect, seed, sample dates and row counts), attribute `dataType`, `businessKey` and `sampleValues`, fact `dataType` and `sampleRange`.
+- Business owner, open-question owner and sponsor offer the project's stakeholders in a combobox, and a new name can be added as a stakeholder in one click; stakeholder cards show what each person owns (#51).
+
 ### Changed
 - The coach panel button now uses a lightbulb icon; **?** opens Help.
+- Text areas grow with their content; assumptions and open questions are full width, so long text is readable (#49).
+- Example text in empty fields varies per item and follows the process or dimension name (#50).
+- Removing a process, dimension, stakeholder or requirement offers Undo; only a just-added item takes focus; the bus matrix keeps its column order while you edit; a bubble opens its dimension (#54).
 
 ### Fixed
 - Pluralisation in phase details ("business processes").
 - Review feedback on the core engine (wrapping, CSV formula injection, Markdown HTML escaping, id sanitising, duplicate roles, review status, blank scores). Degenerate dimensions are no longer counted as conformed.
+- Full product review (#54):
+  - Live sync never saves over a project file it could not read, retries failed saves instead of showing them as saved, queues saves, and re-checks for typing before applying an outside edit; redo is cleared when the project is replaced, so it can't undo Claude's edit.
+  - `kimball serve` answers oversized saves with 413 instead of resetting the connection, rejects JSON that isn't a project with 422, accepts any Content-Type case and port 80, reads the file and its time stamp consistently, and uses unique temp files.
+  - The requirements document escapes user text in headings, lists and code spans, and no longer marks degenerate dimensions as conformed there; SVG exports drop control characters; text wrapping never splits emoji; bus matrix CSV opens correctly in Excel.
+  - Removing a stakeholder unlinks it from requirements; dangling references can be removed in the UI.
+  - Keyboard and accessibility: the Project menu supports arrow keys and Escape, focus moves to the new phase on navigation, Ctrl+Z works after ticking a checkbox, tags can't be duplicated or lost to Backspace auto-repeat, copy failures and errors are announced, and dark-mode status colours keep readable text.

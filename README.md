@@ -34,17 +34,18 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 ## How it works
 
 ```
- Discover                         Model                                         Deliver
- ───────────────────────────      ──────────────────────────────────────────    ─────────────────────────────────
- 1 Kickoff                         4 Business processes   6 Dimensions           8  Bubble diagrams
- 2 Stakeholders & interviews       5 Grain                7 Facts & measures     9  Bus matrix
- 3 Requirements                                                                  10 Review & export
+ Discover                         Model                                         Deliver                     Build
+ ───────────────────────────      ──────────────────────────────────────────    ─────────────────────────   ──────────────────
+ 1 Kickoff                         4 Business processes   6 Dimensions           8  Bubble diagrams          11 Prototype:
+ 2 Stakeholders & interviews       5 Grain                7 Facts & measures     9  Bus matrix                  sample data, SQL,
+ 3 Requirements                                                                  10 Review & export             Docker sandbox
 ```
 
 - **Claude skill** — Claude interviews you phase by phase, asks a few focused questions at a time, records the answers in a `*.kimball.json` project file, validates the model against Kimball best practices and renders the deliverables.
 - **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file, or online at [kimball.kristinn.eu](https://kimball.kristinn.eu).
 - **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
 - **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
+- **Prototype** — the design as a star schema filled with sample data you can query in the browser, a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake with index recommendations, and a Docker sandbox. Claude can make the sample data look like your business.
 - **Help and demos** — a built-in Help page (the **?** button) with guided demos, a guide to every deliverable, a glossary and an FAQ.
 
 ## What you get
@@ -55,7 +56,7 @@ At the end you have an agreed, documented high-level dimensional design, the blu
 - **A prioritised first release:** every process scored on business value × feasibility.
 - **An architecture that grows without rework:** the bus matrix shows which conformed dimensions to build once and share.
 - **Traceability and honest unknowns:** every business question linked to a process; assumptions and open questions recorded with owners.
-- **A head start on the build:** grain, fact table types, facts with additivity and dimensions with roles feed straight into the detailed design.
+- **A head start on the build:** grain, fact table types, facts with additivity and dimensions with roles feed straight into the detailed design, and the prototype gives you a first CREATE TABLE script with index advice.
 
 The [user guide](docs/USER-GUIDE.md) explains each deliverable: what's in it, who uses it and why it matters. It also covers the ten phases, step-by-step demos, the CLI and an FAQ. The same guide is in the app under **Help**.
 
@@ -66,6 +67,8 @@ The [user guide](docs/USER-GUIDE.md) explains each deliverable: what's in it, wh
 | ![Bubble diagram for the Subscription changes process, with conformed dimensions in amber](docs/images/ui-bubble-diagrams.jpg) | ![Interactive bus matrix with conformed dimension columns](docs/images/ui-bus-matrix.jpg) |
 
 ![Dimensions phase in dark mode with the coach panel open](docs/images/ui-dimensions-coach-dark.jpg)
+
+![Prototype phase: net sales by product category over sample data, with the SQL that computes it](docs/images/ui-prototype.jpg)
 
 ## Quick start
 
@@ -95,7 +98,10 @@ Then ask Claude something like *"Help me gather requirements for a sales data wa
 node plugin/skills/kimball-designer/scripts/kimball.mjs init kimball/project.kimball.json --example retail
 node plugin/skills/kimball-designer/scripts/kimball.mjs serve kimball/project.kimball.json
 node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.kimball.json --out kimball/out
+node plugin/skills/kimball-designer/scripts/kimball.mjs prototype kimball/project.kimball.json --out kimball/prototype
 ```
+
+The last command writes a PostgreSQL sandbox: run `docker compose up -d` in `kimball/prototype` to query the star schema with sample data.
 
 ## Repository layout
 
@@ -104,7 +110,7 @@ node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.k
 | [`plugin/skills/kimball-designer/`](plugin/skills/kimball-designer) | The Claude skill (SKILL.md, references, examples, bundled CLI and UI) |
 | [`.claude-plugin/`](.claude-plugin), [`plugin/`](plugin) | Plugin marketplace and plugin manifests |
 | [`evals/`](evals) | Skill evaluation scenarios |
-| [`src/core/`](src/core) | Shared engine: model, schema, validation, bus matrix, bubble layout, exporters |
+| [`src/core/`](src/core) | Shared engine: model, schema, validation, bus matrix, bubble layout, exporters, physical model, DDL, sample data |
 | [`src/app/`](src/app) | Guided web UI (React + TypeScript) |
 | [`src/cli/`](src/cli) | `kimball` CLI and local sync server |
 | [`brand/`](brand) | Logo, colours, typography, voice — see [BRAND.md](brand/BRAND.md) |

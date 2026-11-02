@@ -86,6 +86,8 @@ export interface PhysicalTable {
   scd2?: boolean;
   /** Dimension: a calendar dimension keyed by a yyyymmdd integer. */
   calendar?: boolean;
+  /** Dimension: a junk dimension, one row per combination of its flags and codes. */
+  junk?: boolean;
   /** Fact: grain statement and type. */
   grain?: string;
   factTableType?: FactTableType | null;
@@ -114,7 +116,18 @@ const RESERVED = new Set(
     'join key lateral leading left like limit localtime localtimestamp natural not null of offset on only or order ' +
     'outer percent plan primary qualify references regexp right rlike row rows sample select session_user set some ' +
     'table tablesample then to top trailing trigger true union unique update user using values view when where ' +
-    'window with'
+    'window with ' +
+    // SQL Server
+    'add backup begin break browse bulk cascade checkpoint close clustered coalesce commit compute contains continue convert ' +
+    'cursor database dbcc deallocate declare deny disk distributed double dump errlvl escape exec execute exit external file ' +
+    'fillfactor function goto holdlock identity identitycol if kill lineno load merge national nocheck nonclustered nullif ' +
+    'off offsets open option over pivot precision print proc procedure public raiserror read readtext reconfigure ' +
+    'replication restore restrict return revert revoke rollback rowcount rowguidcol rule save schema securityaudit setuser ' +
+    'shutdown statistics system_user textsize tran transaction truncate try_convert tsequal unpivot updatetext use varying ' +
+    'waitfor while writetext ' +
+    // Snowflake and PostgreSQL
+    'account connect connection following gscluster increment issue minus organization start try_cast whenever ' +
+    'analyse analyze asymmetric deferrable initially placing returning symmetric variadic'
   ).split(' '),
 );
 
@@ -372,6 +385,7 @@ function dimensionTable(dim: Dimension, tableName: string): PhysicalTable {
     businessKey,
     scd2,
     calendar,
+    junk: dim.kind === 'junk',
     description: dim.description.trim() || `${label} dimension`,
   };
 }

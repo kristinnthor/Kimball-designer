@@ -1642,16 +1642,15 @@ pre.summary {
 }
 
 .proto-settings {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--kd-space-5);
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kd-space-5) var(--kd-space-6);
+  align-items: flex-end;
 }
 
-@media (max-width: 1100px) {
-  .proto-settings {
-    grid-template-columns: 1fr;
-  }
+.proto-settings input[type='date'] {
+  width: 170px;
+  flex: none;
 }
 
 .explore-controls {

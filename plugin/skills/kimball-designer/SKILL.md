@@ -26,7 +26,7 @@ Act like an experienced data-warehouse architect who is a good teacher: plain la
 
 `$KD` is shorthand in this document only: always type the full `node "<path>/scripts/kimball.mjs"` command, because it is not a shell variable. If the path above still shows a literal `${CLAUDE_SKILL_DIR}`, use the absolute path of the folder that contains this SKILL.md. If `node` is not available, follow "Without Node" at the end.
 
-CLI commands: `init`, `summary`, `validate`, `render`, `serve`, `guide`, `examples`. Run `$KD --help` for flags.
+CLI commands: `init`, `summary`, `validate`, `render`, `ddl`, `prototype`, `serve`, `guide`, `examples`. Run `$KD --help` for flags.
 
 ## Workflow
 
@@ -41,7 +41,7 @@ CLI commands: `init`, `summary`, `validate`, `render`, `serve`, `guide`, `exampl
    `$KD serve <file> --open` (default port 4178; use `--port` if busy).
    Explain once: *"You can type in the browser or answer me here — we're both editing the same file, and the UI updates live."*
 
-### 2. Work through the ten phases
+### 2. Work through the phases
 
 | # | Phase | Goal | Record in the project file |
 |---|---|---|---|
@@ -55,6 +55,7 @@ CLI commands: `init`, `summary`, `validate`, `render`, `serve`, `guide`, `exampl
 | 8 | `bubbles` | Review one bubble diagram per process | (derived) |
 | 9 | `matrix` | Review the bus matrix; agree conformed dimensions | (derived) |
 | 10 | `review` | Resolve findings; export | — |
+| 11 | `prototype` | Optional: try the design on sample data; get DDL and index advice | `attributes[].sampleValues`, `businessKey`, `dataType`; `facts[].sampleRange`; `physical` |
 
 For **each phase**:
 
@@ -82,6 +83,16 @@ Run `$KD render <file> --out kimball/out`. Then give the user a short hand-off:
 
 Templates for this message are in `references/deliverables.md`.
 
+### 5. Prototype (optional, after the design is agreed)
+
+Offer it once the hand-off is done: *"Want to see the design with data? I can turn it into tables with sample rows, a CREATE TABLE script with index advice, and a PostgreSQL sandbox for Docker."* If the user agrees, follow `references/prototype-guide.md`:
+
+1. Set `meta.currentPhase` to `prototype` and ask which database platform they target (PostgreSQL, SQL Server or Snowflake).
+2. Suggest business keys, data types and 5–15 **realistic sample values** per descriptive attribute for their domain. They are example data, so you may propose them, but label them as suggestions and record them only after the user agrees.
+3. Run `$KD prototype <file> --out kimball/prototype --dialect <dialect>` (or `$KD ddl <file> --dialect <dialect>` for just the script).
+4. If Docker is installed and the user agrees, start the sandbox (`docker compose up -d` in that folder) and answer two or three must-have requirements with SQL against it.
+5. Hand over `schema.sql`, the most important index recommendations and what to review before the real build.
+
 ## Rules
 
 - **Don't invent business facts.** Names of systems, KPIs, owners, grains and volumes come from the user. When something is unknown, add an `openQuestions[]` entry (with an owner if known) or an `assumptions[]` entry and say so.
@@ -105,4 +116,5 @@ If `node` isn't available: edit the project file directly following `schema/kimb
 | `references/kimball-primer.md` | Explaining concepts; understanding validation rules |
 | `references/schema-guide.md` | Editing the project file |
 | `references/deliverables.md` | Presenting results; working without Node |
+| `references/prototype-guide.md` | Phase 11: sample data, CREATE TABLE scripts, index advice and the Docker sandbox |
 | `references/user-guide.md` | The user asks how to use Kimball Designer (UI, demos, CLI, saving) or what the process delivers to them |

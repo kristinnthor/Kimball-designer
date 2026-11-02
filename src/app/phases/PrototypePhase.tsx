@@ -589,13 +589,13 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
           <IconDownload /> Docker sandbox (.zip)
         </button>
         <button type="button" className="btn" onClick={() => downloadText(`${base}-schema.${settings.dialect}.sql`, ddl, 'application/sql')}>
-          <IconDownload /> CREATE TABLE script
+          <IconDownload /> CREATE TABLE (.sql)
         </button>
         <button type="button" className="btn" onClick={() => downloadText(`${base}-data.${settings.dialect}.sql`, seedScript(project, data, settings.dialect, model), 'application/sql')}>
-          <IconDownload /> Sample data
+          <IconDownload /> Sample data (.sql)
         </button>
         <button type="button" className="btn" onClick={() => downloadText(`${base}-index-recommendations.md`, indexAdviceToMarkdown(project, settings.dialect, model), 'text/markdown')}>
-          <IconDownload /> Index advice
+          <IconDownload /> Index advice (.md)
         </button>
         <button type="button" className="btn ghost" onClick={() => void copy(ddl, 'CREATE TABLE script')}>
           <IconCopy /> Copy script

@@ -74,6 +74,13 @@ test('a developer goes from kickoff to bus matrix and exports everything (offlin
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download all/ }).click()]);
   expect(download.suggestedFilename()).toBe('coffee-chain-analytics-kimball-deliverables.zip');
 
+  // 11 Prototype: the design as tables with sample data, and the CREATE TABLE script.
+  await page.getByRole('button', { name: 'Next: Prototype' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Prototype' })).toBeVisible();
+  await expect(page.locator('.table-card')).toHaveCount(5); // dim_date, dim_customer, dim_product, fact_orders, fact_shipments
+  await expect(page.locator('.explore-result tbody tr').first()).toBeVisible();
+  await expect(page.getByLabel('SQL for this question')).toContainText('FROM fact_orders AS f');
+
   // Autosave status is shown (persistence across reloads is covered by the served-mode test).
   await expect(page.getByRole('status').filter({ hasText: /Saved in this browser|storage is unavailable/ }).first()).toBeVisible();
 });
@@ -92,9 +99,10 @@ test('an example project loads and every phase renders', async ({ page }) => {
     ['bubbles', 'Bubble diagrams'],
     ['matrix', 'Bus matrix'],
     ['review', 'Review & export'],
+    ['prototype', 'Prototype'],
   ] as const) {
     await goToPhase(page, id);
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
   }
-  await expect(page.getByText('10 of 10 phases')).toBeVisible();
+  await expect(page.getByText('11 of 11 phases')).toBeVisible();
 });
