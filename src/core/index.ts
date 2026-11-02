@@ -18,3 +18,5 @@ export * from './sampledata';
 export * from './explore';
 export * from './prototype';
 export * from './traceability';
+export * from './sandbox';
+export * from './dbt';

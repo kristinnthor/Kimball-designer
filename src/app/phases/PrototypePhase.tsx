@@ -5,6 +5,7 @@ import {
   PRIORITIES,
   SAMPLE_ROWS_MAX,
   SQL_DIALECTS,
+  dbtProjectFiles,
   ddlScript,
   defaultQuery,
   defaultRows,
@@ -725,10 +726,10 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
   const adviceGroups = groupAdvice(indexAdvice(model, settings.dialect)).filter((g) => g.when !== 'table');
   const seedPreview = view === 'seed' ? seedScript(project, data, settings.dialect, model) : '';
   const dialectLabel = SQL_DIALECTS.find((d) => d.value === settings.dialect)!.label;
-  const sandbox = () => {
-    const files = prototypeFiles(project, settings).map((f) => ({ name: `${base}-prototype/${f.name}`, data: f.data }));
-    downloadBlob(`${base}-prototype.zip`, new Blob([createZip(files) as BlobPart], { type: 'application/zip' }));
-  };
+  const zip = (name: string, files: { name: string; data: string }[]) =>
+    downloadBlob(`${name}.zip`, new Blob([createZip(files.map((f) => ({ name: `${name}/${f.name}`, data: f.data }))) as BlobPart], { type: 'application/zip' }));
+  const sandbox = () => zip(`${base}-prototype`, prototypeFiles(project, settings));
+  const dbt = () => zip(`${base}-dbt`, dbtProjectFiles(project, settings, model, data));
   return (
     <>
       <div className="row" style={{ marginBottom: 12 }}>
@@ -781,6 +782,9 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
         <button type="button" className="btn fact" onClick={sandbox}>
           <IconDownload /> Docker sandbox (.zip)
         </button>
+        <button type="button" className="btn" onClick={dbt}>
+          <IconDownload /> dbt project (.zip)
+        </button>
         <button type="button" className="btn" onClick={() => downloadText(`${base}-schema.${settings.dialect}.sql`, ddl, 'application/sql')}>
           <IconDownload /> CREATE TABLE (.sql)
         </button>
@@ -797,6 +801,17 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
       <p className="hint" style={{ marginTop: 12 }}>
         The sandbox runs PostgreSQL in Docker with these tables and rows: unzip it and run <code>docker compose up -d</code>, then connect to{' '}
         <code>127.0.0.1:5433</code> (database and user <code>kimball</code>). It also contains the script for {dialectLabel}, the index advice and CSV files.
+      </p>
+      <p className="hint">
+        The dbt project has a model per table with descriptions and tests from the design, and the sample rows as seeds.{' '}
+        {settings.dialect === 'postgres' ? (
+          <>
+            <code>dbt seed</code>, <code>dbt run</code> and <code>dbt test</code> work against the sandbox as they are.
+          </>
+        ) : (
+          <>Its profile reads the {dialectLabel} connection from environment variables; choose PostgreSQL to run it against the sandbox.</>
+        )}{' '}
+        Its README explains how to swap the seeds for your staging models.
       </p>
     </>
   );

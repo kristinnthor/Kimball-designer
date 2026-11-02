@@ -206,7 +206,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
   {
     id: 'prototype',
     title: 'Prototype: sample data, SQL and a sandbox',
-    formats: 'In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV · `kimball prototype`, `kimball ddl`',
+    formats: 'In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV, a dbt project · `kimball prototype`, `kimball ddl`',
     summary: 'Your design as a star schema filled with made-up rows, a CREATE TABLE script with index advice, and a PostgreSQL sandbox for Docker.',
     contains: [
       'One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).',
@@ -214,6 +214,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
       'The question that answers each requirement, saved with it: the requirements document shows it and `queries.sql` gets its SQL.',
       'CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).',
       'A Docker Compose sandbox that loads the tables and data on first start.',
+      'A dbt project: a model per table with descriptions and tests (unique and not-null keys, every fact key found in its dimension), with the sample rows as seeds so it runs against the sandbox as it is.',
     ],
     usedBy: 'Data engineers starting the build, and the business users who want to see how their questions will be answered.',
     why: 'Problems with the grain or missing dimensions show up in minutes with rows in front of you, instead of after the first load job.',
@@ -246,7 +247,7 @@ export const HELP_NOT_INCLUDED_LEAD = 'Kimball Designer covers the high-level de
 /** Honest scope: what the tool does not produce. */
 export const HELP_NOT_INCLUDED: string[] = [
   'A finished physical design: the CREATE TABLE script is a starting point to review, not production-ready DDL.',
-  'Source-to-target mappings and ETL or ELT code.',
+  'Source-to-target mappings and ETL or ELT code: the dbt project reads sample rows until you connect your own staging models.',
   'Data profiling or connections to your source systems.',
   'Dashboards or reports.',
 ];
@@ -610,7 +611,7 @@ export const HELP_CLI: HelpCommand[] = [
   { command: 'validate <file>', description: 'Check the model against the Kimball rules (`--json`, `--strict`).' },
   { command: 'render <file> --out <dir>', description: 'Write the requirements document, bus matrix and bubble diagrams.' },
   { command: 'ddl <file> --dialect postgres', description: 'Print the CREATE TABLE script with keys and index advice (postgres, sqlserver, snowflake).' },
-  { command: 'prototype <file> --out <dir>', description: 'Write the prototype bundle: Docker sandbox, scripts, sample data and index recommendations.' },
+  { command: 'prototype <file> --out <dir>', description: 'Write the prototype bundle: Docker sandbox, scripts, sample data, index recommendations and a dbt project.' },
   { command: 'guide [phase]', description: 'Coaching notes for a phase: why, what to ask, tips and pitfalls.' },
   { command: 'examples', description: 'List the example projects.' },
 ];
@@ -689,7 +690,7 @@ export const HELP_FAQ: HelpQuestion[] = [
   },
   {
     q: 'Does it generate SQL or table designs?',
-    a: 'Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data and a Docker sandbox. Review data types and keys in the detailed design before you build for real.',
+    a: 'Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data, a Docker sandbox and a dbt project with tests. Review data types and keys in the detailed design before you build for real.',
   },
   {
     q: 'How long does the process take?',

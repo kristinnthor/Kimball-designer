@@ -32,10 +32,10 @@ Playwright e2e (#33), accessibility (#34), hosted UI on GitHub Pages at kimball.
 In-app Help page that explains what the process delivers (#45), guided demos with a step-by-step demo bar (#46), and a user guide generated from the same content for GitHub and the skill (#47).
 
 ## M6 · Prototype and review
-Owner requests after M5: readable open questions (#49), varied example text (#50), stakeholders as owners (#51), the Prototype phase with sample data and a Docker sandbox (#52), CREATE TABLE scripts with index recommendations (#53), fixes from a full product review (#54), UI polish (#56), and saving the prototype query that answers each requirement (#58).
+Owner requests after M5: readable open questions (#49), varied example text (#50), stakeholders as owners (#51), the Prototype phase with sample data and a Docker sandbox (#52), CREATE TABLE scripts with index recommendations (#53), fixes from a full product review (#54), UI polish (#56), saving the prototype query that answers each requirement (#58), and a generated dbt project (#60).
 
 ## After v1.0 (ideas, not scheduled)
 - Detailed design phase: attribute-level dimension design, SCD strategy per attribute, source-to-target mapping.
-- Generate dbt models and load (ETL/ELT) templates from the physical model; SQL DDL is done (#53).
+- Load (ETL/ELT) templates from source to the star schema; SQL DDL (#53) and a dbt project with models, tests and seeds (#60) are done.
 - Import from existing warehouse metadata (information_schema, dbt manifest).
 - Multi-user collaboration on one project file.
