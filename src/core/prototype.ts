@@ -1,7 +1,9 @@
+import { dbtProjectFiles } from './dbt';
 import { ddlScript, indexAdviceToMarkdown } from './ddl';
 import { defaultQuery, preferredAttribute, querySql } from './explore';
 import { displayName, optionLabel, physicalSettings, PRIORITIES, SQL_DIALECTS, type KimballProject, type PhysicalSettings, type SqlDialect } from './model';
 import { physicalModel } from './physical';
+import { POSTGRES_IMAGE, SANDBOX_PORT } from './sandbox';
 import { generateSampleData, seedScript, tableToCsv } from './sampledata';
 import { slugify } from './text';
 import { requirementAnswers } from './traceability';
@@ -10,7 +12,7 @@ import { APP_VERSION } from './version';
 /**
  * The prototype bundle: a PostgreSQL sandbox for Docker with the star schema and
  * sample data loaded on first start, plus the CREATE TABLE script for the chosen
- * dialect, index recommendations, example queries and CSV files.
+ * dialect, index recommendations, example queries, CSV files and a dbt project.
  */
 
 export interface PrototypeFile {
@@ -18,8 +20,6 @@ export interface PrototypeFile {
   data: string;
 }
 
-export const SANDBOX_PORT = 5433;
-export const POSTGRES_IMAGE = 'postgres:17-alpine';
 
 function compose(project: KimballProject): string {
   const name = `kimball-${slugify(project.meta.name, 'project')}`.slice(0, 50).replace(/-+$/, '');
@@ -116,6 +116,7 @@ To start again after changing the design, write a new bundle and run \`docker co
 | \`index-recommendations.md\` | Which keys and indexes to create, now and later, and why |
 | \`queries.sql\` | The saved queries that answer your requirements, and example star-join queries |
 | \`data/*.csv\` | The sample rows as CSV, to load anywhere |
+| \`dbt/\` | A dbt project: a model per table with descriptions and tests, the sample rows as seeds; see \`dbt/README.md\` |
 
 ## Before you build for real
 
@@ -143,5 +144,6 @@ export function prototypeFiles(project: KimballProject, settings: PhysicalSettin
     const table = dataset.tables[t.name];
     if (table) files.push({ name: `data/${t.name}.csv`, data: tableToCsv(table) });
   }
+  for (const f of dbtProjectFiles(project, settings, model, dataset)) files.push({ name: `dbt/${f.name}`, data: f.data });
   return files;
 }

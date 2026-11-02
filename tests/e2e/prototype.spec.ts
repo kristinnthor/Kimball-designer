@@ -38,6 +38,8 @@ test('the prototype explores sample data and offers the SQL and a sandbox', asyn
   expect(zip.suggestedFilename()).toBe('retail-analytics-prototype.zip');
   const [ddl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'CREATE TABLE (.sql)' }).click()]);
   expect(ddl.suggestedFilename()).toBe('retail-analytics-schema.sqlserver.sql');
+  const [dbt] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'dbt project (.zip)' }).click()]);
+  expect(dbt.suggestedFilename()).toBe('retail-analytics-dbt.zip');
 });
 
 test('stakeholders are offered as business owners, and long open questions stay readable', async ({ page }) => {

@@ -33,7 +33,7 @@ Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not st
 | **M3 · Claude skill** | ✅ | #28 SKILL.md · #29 references · #30 interview guide · #31 plugin · #32 evals |
 | **M4 · Quality & release** | 🙋 | #33 e2e ✅ · #34 a11y ✅ · #35 Pages ✅ · #36 release 🙋 |
 | **M5 · Help & onboarding** | ✅ | #45 help page · #46 guided demos · #47 user guide |
-| **M6 · Prototype & review** | ✅ | #49 open questions · #50 example text · #51 stakeholders as owners · #52 prototype · #53 DDL & index advice · #54 review fixes · #56 UI polish · #58 requirement queries |
+| **M6 · Prototype & review** | ✅ | #49 open questions · #50 example text · #51 stakeholders as owners · #52 prototype · #53 DDL & index advice · #54 review fixes · #56 UI polish · #58 requirement queries · #60 dbt project |
 
 ## 3. How work flows
 
@@ -132,6 +132,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | _this PR_ |
 | 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | [#59](https://github.com/kristinnthor/Kimball-designer/pull/59) |
 | 2026-11-02 | UI polish from the review: keyboard-operable bubbles, legend layout, phone layout (header, stepper, no sideways scroll), coach Escape, priority grid labels, quieter save announcements, labelled chip groups (#56) | [#57](https://github.com/kristinnthor/Kimball-designer/pull/57) |
 | 2026-11-02 | Prototype & review (owner request): phase 11 *Prototype* with sample data, explorer, CREATE TABLE scripts for PostgreSQL/SQL Server/Snowflake with index advice, Docker sandbox, `kimball ddl`/`prototype`; readable open questions, varied examples, stakeholders as owners; fixes from a full review of core, CLI and UI (#49–#54) | [#55](https://github.com/kristinnthor/Kimball-designer/pull/55) |

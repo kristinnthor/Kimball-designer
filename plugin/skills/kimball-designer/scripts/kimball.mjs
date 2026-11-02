@@ -393,7 +393,7 @@ function normalizeProject(input, now = (/* @__PURE__ */ new Date()).toISOString(
     processes: list(input.processes).map(normalizeProcess),
     dimensions: list(input.dimensions).map(normalizeDimension),
     assumptions: (Array.isArray(input.assumptions) ? input.assumptions : []).map(normalizeAssumption).filter((a) => a !== null),
-    openQuestions: (Array.isArray(input.openQuestions) ? input.openQuestions : []).map(normalizeQuestion).filter((q) => q !== null)
+    openQuestions: (Array.isArray(input.openQuestions) ? input.openQuestions : []).map(normalizeQuestion).filter((q2) => q2 !== null)
   };
   if (physical) project.physical = physical;
   return project;
@@ -843,7 +843,7 @@ function datePart(iso, part, attributeName) {
   const d = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();
-  const q = Math.floor(m / 3) + 1;
+  const q2 = Math.floor(m / 3) + 1;
   switch (part) {
     case "date":
       return iso;
@@ -858,7 +858,7 @@ function datePart(iso, part, attributeName) {
     case "month-name":
       return MONTHS[m];
     case "quarter":
-      return `Q${q}`;
+      return `Q${q2}`;
     case "year":
       return y;
     case "year-month":
@@ -872,7 +872,7 @@ function datePart(iso, part, attributeName) {
     case "fiscal-period": {
       const fy = `FY${String(y).slice(2)}`;
       if (/week/i.test(attributeName)) return `${fy} W${String(isoWeek(d)).padStart(2, "0")}`;
-      if (/quarter/i.test(attributeName)) return `${fy} Q${q}`;
+      if (/quarter/i.test(attributeName)) return `${fy} Q${q2}`;
       return `${fy} P${String(m + 1).padStart(2, "0")}`;
     }
   }
@@ -1334,7 +1334,7 @@ function aliasFor(column, used) {
   used.add(alias);
   return alias;
 }
-function querySql(model, query, dialect) {
+function querySql(model, query, dialect, tableName = (t) => t) {
   const fact = model.tables.find((t) => t.name === query.fact);
   if (!fact) return "";
   const used = /* @__PURE__ */ new Set(["f"]);
@@ -1360,8 +1360,8 @@ function querySql(model, query, dialect) {
   }
   const limit = query.limit ?? 20;
   const select = [...groups, `${value} AS ${valueAlias}`];
-  const lines = [`SELECT${dialect === "sqlserver" ? ` TOP (${limit})` : ""}`, `  ${select.join(",\n  ")}`, `FROM ${fact.name} AS f`];
-  for (const j of joins.values()) lines.push(`JOIN ${j.dim.name} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
+  const lines = [`SELECT${dialect === "sqlserver" ? ` TOP (${limit})` : ""}`, `  ${select.join(",\n  ")}`, `FROM ${tableName(fact.name)} AS f`];
+  for (const j of joins.values()) lines.push(`JOIN ${tableName(j.dim.name)} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
   if (filter) lines.push(`WHERE ${filter}`);
   if (groups.length) lines.push(`GROUP BY ${groups.join(", ")}`);
   lines.push(`ORDER BY ${valueAlias} DESC`);
@@ -1374,17 +1374,17 @@ function fromRequirementQuery(model, query) {
   const fact = model.tables.find((t) => t.kind === "fact" && t.sourceId === query.processId);
   if (!fact) return null;
   const options = new Set(groupOptions(model, fact).map((o) => o.key));
-  const by = (q) => {
+  const by = (q2) => {
     let g;
-    if (!q.attributeId && !q.column) {
-      const c = fact.columns.find((x) => x.source.kind === "degenerate" && x.source.dimensionId === q.dimensionId);
+    if (!q2.attributeId && !q2.column) {
+      const c = fact.columns.find((x) => x.source.kind === "degenerate" && x.source.dimensionId === q2.dimensionId);
       g = c && { column: c.name };
     } else {
       const fk = fact.columns.find(
-        (x) => x.source.kind === "usage" && x.source.dimensionId === q.dimensionId && (x.source.role ?? "") === (q.role ?? "")
+        (x) => x.source.kind === "usage" && x.source.dimensionId === q2.dimensionId && (x.source.role ?? "") === (q2.role ?? "")
       );
       const dim = fk && model.tables.find((t) => t.name === fk.references?.table);
-      const a = dim?.columns.find((x) => q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column && !attributeIdOf(x));
+      const a = dim?.columns.find((x) => q2.attributeId ? attributeIdOf(x) === q2.attributeId : x.name === q2.column && !attributeIdOf(x));
       g = fk && a && { column: fk.name, attribute: a.name };
     }
     return g && options.has(groupKey(g)) ? g : null;
@@ -1412,12 +1412,12 @@ function describeRequirementQuery(project, query) {
   const process2 = processById(project, query.processId);
   const measure = process2?.facts.find((f) => f.id === query.measureId);
   const what = query.aggregate === "count" || !measure ? "number of rows" : `${AGGREGATES2.find((a) => a.value === query.aggregate).label.toLowerCase()} of ${displayName(measure)}`;
-  const column = (q) => {
-    const dim = dimensionById(project, q.dimensionId);
-    const subject = q.role?.trim() || (dim ? displayName(dim) : q.dimensionId);
-    if (!q.attributeId && !q.column) return subject;
-    const attr = dim?.attributes.find((a) => a.id === q.attributeId);
-    return `${subject} › ${attr ? displayName(attr) : (q.column ?? q.attributeId ?? "").replace(/_/g, " ")}`;
+  const column = (q2) => {
+    const dim = dimensionById(project, q2.dimensionId);
+    const subject = q2.role?.trim() || (dim ? displayName(dim) : q2.dimensionId);
+    if (!q2.attributeId && !q2.column) return subject;
+    const attr = dim?.attributes.find((a) => a.id === q2.attributeId);
+    return `${subject} › ${attr ? displayName(attr) : (q2.column ?? q2.attributeId ?? "").replace(/_/g, " ")}`;
   };
   const by = query.groupBy.length ? ` by ${query.groupBy.map(column).join(" and ")}` : "";
   const where = query.filter ? `, where ${column(query.filter.column)} is “${query.filter.value}”` : "";
@@ -1463,7 +1463,7 @@ function validateProject(project) {
     ...dimensions.map((d) => d.id),
     ...dimensions.flatMap((d) => d.attributes.map((a) => a.id)),
     ...project.assumptions.map((a) => a.id),
-    ...project.openQuestions.map((q) => q.id)
+    ...project.openQuestions.map((q2) => q2.id)
   ];
   for (const x of allIds) seen.set(x, (seen.get(x) ?? 0) + 1);
   for (const [dup, count] of seen) {
@@ -2100,11 +2100,11 @@ function layoutBubble(project, process2, options = {}) {
   const grainLines = wrapText(process2.grain.trim() || "Grain not declared yet", Math.floor((width - 2 * PAD - 60) / 7.4), 3);
   const bodyBottom = Math.max(TOP + size, panel ? panel.y + panel.height : 0);
   const footerY = bodyBottom + 20;
-  const oneLine = width - 2 * PAD >= LEGEND_KEY_W + 24 + LEGEND_ADDITIVITY_W;
-  const extraLine = panel && !oneLine ? 18 : 0;
+  const oneLine2 = width - 2 * PAD >= LEGEND_KEY_W + 24 + LEGEND_ADDITIVITY_W;
+  const extraLine = panel && !oneLine2 ? 18 : 0;
   const height = footerY + 30 + grainLines.length * 18 + 40 + extraLine;
   const keyY = height - 18 - extraLine;
-  const legend = { keyY, additivityY: panel ? oneLine ? keyY : keyY + 18 : null };
+  const legend = { keyY, additivityY: panel ? oneLine2 ? keyY : keyY + 18 : null };
   return {
     width: Math.ceil(width),
     height: Math.ceil(height),
@@ -2377,7 +2377,7 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
   out.push(...project.assumptions.length ? project.assumptions.map((a) => `- ${mdInline(a.text)}`) : ["_None recorded._"]);
   out.push("", "**Open questions**", "");
   out.push(
-    ...project.openQuestions.length ? project.openQuestions.map((q) => `- [${q.status === "answered" ? "x" : " "}] ${mdInline(q.text)}${q.owner.trim() ? ` — _${mdInline(q.owner)}_` : ""}`) : ["_None recorded._"]
+    ...project.openQuestions.length ? project.openQuestions.map((q2) => `- [${q2.status === "answered" ? "x" : " "}] ${mdInline(q2.text)}${q2.owner.trim() ? ` — _${mdInline(q2.owner)}_` : ""}`) : ["_None recorded._"]
   );
   h("## 9. Validation summary");
   const findings = validateProject(project);
@@ -3424,6 +3424,7 @@ var GUIDANCE = {
       "Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.",
       "Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.",
       "Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.",
+      "Building with dbt? The dbt project has a model per table, the tests and the sample rows as seeds: dbt seed, dbt run and dbt test work against the sandbox.",
       "Treat the script as a starting point: review data types, text lengths and business keys before you build."
     ],
     pitfalls: [
@@ -3844,9 +3845,248 @@ function groupAdvice(advice) {
   return out;
 }
 
-// src/core/prototype.ts
+// src/core/sandbox.ts
 var SANDBOX_PORT = 5433;
 var POSTGRES_IMAGE = "postgres:17-alpine";
+
+// src/core/dbt.ts
+var dbtSeedName = (table) => `sample_${table}`;
+function escapeJinja(text) {
+  return text.replace(/\{[{%#]/g, (m) => `{{ '${m}' }}`);
+}
+var oneLine = (text) => escapeJinja(text.replace(/\s+/g, " ").trim());
+function tableDescription(t) {
+  if (t.kind === "fact") {
+    const type = optionLabel(FACT_TABLE_TYPES, t.factTableType ?? null);
+    return [t.description, t.grain ? `Grain: ${t.grain}` : "Grain: not declared yet.", type ? `${type} fact table.` : ""].filter(Boolean).join(" ");
+  }
+  return [
+    t.description,
+    t.calendar ? "A calendar: one row per day." : "",
+    t.junk ? "Junk dimension: one row per combination of its flags and codes." : "",
+    t.scd2 ? "Keeps type 2 history: one row per version." : "",
+    t.businessKey?.length ? `Business key: ${t.businessKey.join(", ")}.` : ""
+  ].filter(Boolean).join(" ");
+}
+function columnTests(t, c) {
+  switch (c.role) {
+    case "surrogate-key":
+      return [{ test: "unique" }, { test: "not_null" }];
+    case "business-key":
+      return t.businessKey?.length === 1 && !t.scd2 && !t.junk ? [{ test: "unique" }, { test: "not_null" }] : [{ test: "not_null" }];
+    case "foreign-key":
+      return c.references ? [{ test: "not_null" }, { test: "relationships", to: { model: c.references.table, field: c.references.column } }] : [{ test: "not_null" }];
+    case "degenerate":
+      return [{ test: "not_null" }];
+    case "history":
+      return c.nullable ? [] : [{ test: "not_null" }];
+    default:
+      return [];
+  }
+}
+function dbtModels(model) {
+  return model.tables.map((t) => ({
+    name: t.name,
+    seed: dbtSeedName(t.name),
+    table: t,
+    description: oneLine(tableDescription(t)),
+    columns: t.columns.map((c) => ({ name: c.name, description: oneLine(c.note), tests: columnTests(t, c) }))
+  }));
+}
+var q = (s) => JSON.stringify(s);
+function modelSql(m) {
+  const t = m.table;
+  const lines = [`-- ${m.name}: ${oneLine(t.label)}`];
+  if (t.kind === "fact" && t.grain) lines.push(`-- Grain: ${oneLine(t.grain)}`);
+  lines.push(
+    "--",
+    `-- Reads the made-up sample rows for now (seeds/${m.seed}.csv). For the real build, select these`,
+    "-- columns from your staging model instead; the tests in _models.yml still apply."
+  );
+  if (t.kind === "fact") {
+    lines.push(
+      "-- Look up each dimension's surrogate key by its business key (the current row of a type 2",
+      "-- dimension), and use the Unknown row when there is no match, so no key is ever null."
+    );
+  } else if (t.calendar) {
+    lines.push("-- A calendar is generated, not loaded: one row per day from a date spine.");
+  } else {
+    if (t.scd2) {
+      lines.push(
+        "-- Type 2 history: take the versions from a dbt snapshot of the source (dbt_valid_from is",
+        "-- row_effective_date, dbt_valid_to is row_expiration_date; the current version has no end date)."
+      );
+    }
+    lines.push("-- Add an Unknown row (for example key -1) for facts that arrive without a match.");
+  }
+  lines.push("", "select", t.columns.map((c) => `    ${c.name}`).join(",\n"), `from {{ ref('${m.seed}') }}`);
+  return lines.join("\n") + "\n";
+}
+function modelsYml(models) {
+  const out = ["version: 2", "", "models:"];
+  for (const m of models) {
+    out.push(`  - name: ${q(m.name)}`, `    description: ${q(m.description)}`, "    columns:");
+    for (const c of m.columns) {
+      out.push(`      - name: ${q(c.name)}`);
+      if (c.description) out.push(`        description: ${q(c.description)}`);
+      if (!c.tests.length) continue;
+      out.push("        data_tests:");
+      for (const t of c.tests) {
+        if (t.test === "relationships") {
+          out.push("          - relationships:", "              arguments:", `                to: ${q(`ref('${t.to.model}')`)}`, `                field: ${q(t.to.field)}`);
+        } else {
+          out.push(`          - ${t.test}`);
+        }
+      }
+    }
+  }
+  return out.join("\n") + "\n";
+}
+function projectYml(project, name, models, dialect) {
+  const out = [
+    `# ${oneLine(displayName(project.meta, "Untitled project"))}: dbt project generated by Kimball Designer ${APP_VERSION}.`,
+    "# The models read the made-up sample rows in seeds/. For the real build, replace each ref('sample_…')",
+    "# with your staging model and keep the tests.",
+    `name: ${q(name)}`,
+    'version: "1.0.0"',
+    "config-version: 2",
+    'require-dbt-version: ">=1.10.0"',
+    `profile: ${q(name)}`,
+    "",
+    'model-paths: ["models"]',
+    'seed-paths: ["seeds"]',
+    'analysis-paths: ["analyses"]',
+    'target-path: "target"',
+    'clean-targets: ["target", "dbt_packages"]',
+    "",
+    "models:",
+    `  ${q(name)}:`,
+    "    +materialized: table",
+    "",
+    `# Column types for ${optionLabel(SQL_DIALECTS, dialect)}, the same as in the CREATE TABLE script.`,
+    "seeds:",
+    `  ${q(name)}:`,
+    "    +quote_columns: false"
+  ];
+  for (const m of models) {
+    out.push(`    ${q(m.seed)}:`, "      +column_types:");
+    for (const c of m.table.columns) out.push(`        ${q(c.name)}: ${q(sqlType(c, dialect))}`);
+  }
+  return out.join("\n") + "\n";
+}
+function profilesYml(name, dialect) {
+  const head = ["# Where dbt runs the project. dbt reads this file from the folder you run it in; or copy the", "# profile into ~/.dbt/profiles.yml.", `${q(name)}:`];
+  if (dialect === "postgres") {
+    return [
+      ...head,
+      "  target: sandbox",
+      "  outputs:",
+      "    # The Docker sandbox of the prototype bundle (docker compose up -d in the folder above).",
+      "    sandbox:",
+      "      type: postgres",
+      '      host: "127.0.0.1"',
+      `      port: ${SANDBOX_PORT}`,
+      "      user: kimball",
+      '      password: ""',
+      "      dbname: kimball",
+      "      schema: analytics",
+      "      threads: 4",
+      ""
+    ].join("\n");
+  }
+  const env = (v) => q(`{{ env_var('${v}') }}`);
+  const outputs = dialect === "sqlserver" ? [
+    "      type: sqlserver",
+    '      driver: "ODBC Driver 18 for SQL Server"',
+    `      server: ${env("DBT_SQLSERVER_HOST")}`,
+    "      port: 1433",
+    `      database: ${env("DBT_SQLSERVER_DATABASE")}`,
+    "      schema: analytics",
+    `      user: ${env("DBT_SQLSERVER_USER")}`,
+    `      password: ${env("DBT_SQLSERVER_PASSWORD")}`,
+    "      encrypt: true",
+    "      trust_cert: false",
+    "      threads: 4"
+  ] : [
+    "      type: snowflake",
+    `      account: ${env("SNOWFLAKE_ACCOUNT")}`,
+    `      user: ${env("SNOWFLAKE_USER")}`,
+    `      password: ${env("SNOWFLAKE_PASSWORD")}`,
+    `      role: ${env("SNOWFLAKE_ROLE")}`,
+    `      warehouse: ${env("SNOWFLAKE_WAREHOUSE")}`,
+    `      database: ${env("SNOWFLAKE_DATABASE")}`,
+    "      schema: analytics",
+    "      threads: 4"
+  ];
+  return [...head, "  target: dev", "  outputs:", "    # Fill in the environment variables; never write passwords into this file.", "    dev:", ...outputs, ""].join("\n");
+}
+function readme(project, name, dialect, analyses) {
+  const adapter = { postgres: "dbt-postgres", sqlserver: "dbt-sqlserver", snowflake: "dbt-snowflake" }[dialect];
+  const where = dialect === "postgres" ? `It runs against the Docker sandbox of the prototype bundle: start it first with \`docker compose up -d\` in the folder above (PostgreSQL on 127.0.0.1:${SANDBOX_PORT}). dbt writes to the \`analytics\` schema.` : `\`profiles.yml\` reads the connection from environment variables; set them first. For the Docker sandbox, choose PostgreSQL in the prototype settings and generate the project again.`;
+  return `# ${displayName(project.meta, "Untitled project")}: dbt project
+
+Generated by Kimball Designer ${APP_VERSION} for ${optionLabel(SQL_DIALECTS, dialect)}. The models and tests follow your design; the seeds are **made-up sample rows**, so you can run the whole project before any source is connected.
+
+## Run it
+
+You need Python and dbt 1.10 or later with the ${adapter} adapter (\`pip install ${adapter}\`). ${where}
+
+\`\`\`bash
+dbt debug          # checks the connection
+dbt seed           # loads the sample rows
+dbt run            # builds the dimension and fact models
+dbt test           # keys are unique and not null, and every fact key exists in its dimension
+dbt docs generate && dbt docs serve
+\`\`\`
+
+## Files
+
+| File | What |
+|---|---|
+| \`dbt_project.yml\` | Project \`${name}\`: models as tables, seed column types for ${optionLabel(SQL_DIALECTS, dialect)} |
+| \`profiles.yml\` | The connection |
+| \`models/marts/*.sql\` | One model per dimension and fact table |
+| \`models/marts/_models.yml\` | Descriptions from the design (grain, additivity, SCD) and the tests |
+| \`seeds/sample_*.csv\` | The sample rows each model reads for now |
+| \`analyses/*.sql\` | ${analyses ? `The saved query for each of the ${analyses} answered requirements; \`dbt compile\` writes the SQL to \`target/\`` : "Empty: save the query that answers a requirement in the Prototype phase to get one here"} |
+
+## Build it for real
+
+1. Declare your sources and write a staging model per source table (\`models/staging/\`).
+2. In each model, replace \`ref('sample_…')\` with the staging model and keep the column names.
+3. Dimensions: generate the surrogate key, take type 2 history from a dbt snapshot, and add an Unknown row.
+4. Facts: look up each surrogate key by the business key and use the Unknown row when nothing matches. Consider incremental models for large fact tables.
+5. Delete the seeds, and keep and extend the tests.
+`;
+}
+function dbtProjectFiles(project, settings = physicalSettings(project), model = physicalModel(project), dataset = generateSampleData(project, model, settings)) {
+  const name = sqlName(displayName(project.meta, "kimball"), "kimball");
+  const dialect = settings.dialect;
+  const models = dbtModels(model);
+  const files = [];
+  const ref = (table) => `\0${table}\0`;
+  const analyses = requirementAnswers(project, model).filter((a) => a.query).map((a) => {
+    const r = a.requirement;
+    const header = [`-- ${a.label} (${optionLabel(PRIORITIES, r.priority)}): ${r.statement}`, `-- ${a.description}`].map((l) => l.replace(/\s+/g, " ").trim());
+    const sql = escapeJinja([...header, querySql(model, a.query, dialect, ref).replace(/;\s*$/, "")].join("\n")).replace(/\u0000(\w+)\u0000/g, "{{ ref('$1') }}");
+    return { name: `analyses/${a.label.toLowerCase()}_${sqlName(r.statement, "requirement").slice(0, 40).replace(/_+$/, "")}.sql`, data: sql + "\n" };
+  });
+  files.push(
+    { name: "README.md", data: readme(project, name, dialect, analyses.length) },
+    { name: "dbt_project.yml", data: projectYml(project, name, models, dialect) },
+    { name: "profiles.yml", data: profilesYml(name, dialect) },
+    { name: "models/marts/_models.yml", data: modelsYml(models) },
+    ...models.map((m) => ({ name: `models/marts/${m.name}.sql`, data: modelSql(m) })),
+    ...analyses
+  );
+  for (const m of models) {
+    const rows = dataset.tables[m.name];
+    if (rows) files.push({ name: `seeds/${m.seed}.csv`, data: tableToCsv(rows).replace(/^﻿/, "") });
+  }
+  return files;
+}
+
+// src/core/prototype.ts
 function compose(project) {
   const name = `kimball-${slugify(project.meta.name, "project")}`.slice(0, 50).replace(/-+$/, "");
   return [
@@ -3891,18 +4131,18 @@ function exampleQueries(project, dialect) {
   }
   out.push("-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements.");
   for (const fact of model.tables.filter((t) => t.kind === "fact")) {
-    const q = defaultQuery(model, fact);
-    out.push("", `-- ${fact.label}${fact.grain ? `: ${fact.grain}` : ""}`, querySql(model, q, dialect));
+    const q2 = defaultQuery(model, fact);
+    out.push("", `-- ${fact.label}${fact.grain ? `: ${fact.grain}` : ""}`, querySql(model, q2, dialect));
     const dateFk = fact.columns.find((c) => c.role === "foreign-key" && model.tables.find((t) => t.name === c.references?.table)?.calendar);
     const dim = dateFk && model.tables.find((t) => t.name === dateFk.references?.table);
     const period = dim && preferredAttribute(dim);
     if (dateFk && period) {
-      out.push("", `-- ${fact.label} by ${period.replace(/_/g, " ")}`, querySql(model, { ...q, groupBy: [{ column: dateFk.name, attribute: period }] }, dialect));
+      out.push("", `-- ${fact.label} by ${period.replace(/_/g, " ")}`, querySql(model, { ...q2, groupBy: [{ column: dateFk.name, attribute: period }] }, dialect));
     }
   }
   return out.join("\n") + "\n";
 }
-function readme(project, settings, tableCount) {
+function readme2(project, settings, tableCount) {
   const dialect = optionLabel(SQL_DIALECTS, settings.dialect);
   return `# ${displayName(project.meta, "Untitled project")}: prototype
 
@@ -3938,6 +4178,7 @@ To start again after changing the design, write a new bundle and run \`docker co
 | \`index-recommendations.md\` | Which keys and indexes to create, now and later, and why |
 | \`queries.sql\` | The saved queries that answer your requirements, and example star-join queries |
 | \`data/*.csv\` | The sample rows as CSV, to load anywhere |
+| \`dbt/\` | A dbt project: a model per table with descriptions and tests, the sample rows as seeds; see \`dbt/README.md\` |
 
 ## Before you build for real
 
@@ -3950,7 +4191,7 @@ function prototypeFiles(project, settings = physicalSettings(project)) {
   const model = physicalModel(project);
   const dataset = generateSampleData(project, model, settings);
   const files = [
-    { name: "README.md", data: readme(project, settings, model.tables.length) },
+    { name: "README.md", data: readme2(project, settings, model.tables.length) },
     { name: "docker-compose.yml", data: compose(project) },
     { name: "initdb/01-schema.sql", data: ddlScript(project, { dialect: "postgres", model }) },
     { name: "initdb/02-data.sql", data: seedScript(project, dataset, "postgres", model) },
@@ -3963,6 +4204,7 @@ function prototypeFiles(project, settings = physicalSettings(project)) {
     const table = dataset.tables[t.name];
     if (table) files.push({ name: `data/${t.name}.csv`, data: tableToCsv(table) });
   }
+  for (const f of dbtProjectFiles(project, settings, model, dataset)) files.push({ name: `dbt/${f.name}`, data: f.data });
   return files;
 }
 
@@ -4140,7 +4382,7 @@ Commands
       --dialect <name>   postgres (default), sqlserver or snowflake
       --out <file>       Write to a file instead
       --drop             Start with DROP TABLE IF EXISTS
-  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV
+  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV, dbt
       --out <dir>        Output folder (default: <file folder>/prototype)
       --dialect <name>   Target platform for schema.sql
       --seed <n>         Seed for the sample data
@@ -4323,7 +4565,7 @@ ${written.map((w) => `  ${w}`).join("\n")}
   docker compose up -d
   docker compose exec db psql -U kimball -d kimball
 `);
-        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect).label}; index advice is in index-recommendations.md.
+        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect).label}; index advice is in index-recommendations.md; dbt/ is a dbt project (see dbt/README.md).
 `);
         return 0;
       }
