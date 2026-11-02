@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Live two-way sync with `kimball serve`: browser edits are saved to the project file, and edits made by Claude show up in the browser (#16).
 - Interactive bubble diagrams (SVG/PNG/Mermaid export), a keyboard-operable bus matrix grid, and a review phase with findings, deliverables, a zip download and a Claude hand-off summary (#22–#24).
 - Shared coaching content for the UI coach and `kimball guide <phase>` (#25); start from an example in the UI (#26); single-file offline UI bundled in the skill (#27).
+- CI runs every example's prototype bundle for real (#63): the Docker sandbox, `queries.sql`, and `dbt seed`, `run`, `test` and the analyses on dbt 1.10.8 and the newest dbt. `bash scripts/check-prototype.sh <example>` does the same locally.
 
 - Claude skill `kimball-designer`: an orchestrated ten-phase workflow (SKILL.md) with references (Kimball primer, phase playbook, schema guide, deliverables) and a stakeholder interview guide (#28–#30).
 - Plugin marketplace packaging (`.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json`) and an install guide (#31).
@@ -56,3 +57,4 @@ All notable changes to this project are documented here. The format follows [Kee
   - Removing a stakeholder unlinks it from requirements; dangling references can be removed in the UI.
   - UI polish (#56): bubbles open their dimension from the keyboard; the bubble legend no longer overlaps or gets clipped; on phones the header fits, the page no longer scrolls sideways and the stepper is one compact row; Escape closes the coach overlay on narrower screens; full height on iOS; processes with the same scores get separate labels on the prioritisation grid; the save status only announces problems to screen readers; chip groups have labels.
   - Keyboard and accessibility: the Project menu supports arrow keys and Escape, focus moves to the new phase on navigation, Ctrl+Z works after ticking a checkbox, tags can't be duplicated or lost to Backspace auto-repeat, copy failures and errors are announced, and dark-mode status colours keep readable text.
+- Long names in the prototype (#64): generated table and column names stay within PostgreSQL's 63 characters, so two long role keys no longer become one column and every dbt seed name fits. A dimension listed twice in a process (only possible by editing the file) gives one key, so a saved requirement query can't pick the wrong one.

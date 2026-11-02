@@ -98,6 +98,7 @@ npm run build:docs     # regenerate docs/USER-GUIDE.md + the skill reference fro
 npm run check          # everything CI runs (except e2e)
 npx playwright install chromium  # once
 npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
+bash scripts/check-prototype.sh retail  # an example's bundle for real: Docker sandbox, queries.sql, dbt (needs Docker, Python, dbt-postgres)
 ```
 
 ## 5. Decisions awaiting the owner

@@ -152,9 +152,16 @@ export function sqlName(text: string, fallback = 'item'): string {
   return name;
 }
 
-function uniqueName(name: string, used: Set<string>): string {
-  let candidate = name;
-  for (let n = 2; used.has(candidate); n++) candidate = `${name}_${n}`;
+/** PostgreSQL cuts identifiers at 63 bytes, which could make two long names one; names are ASCII. */
+export const NAME_MAX = 63;
+/** Table names leave room for the `sample_` prefix of their dbt seed. */
+const TABLE_NAME_MAX = NAME_MAX - 'sample_'.length;
+
+/** The name, shortened to `max` characters and numbered when it is taken. */
+function uniqueName(name: string, used: Set<string>, max = NAME_MAX): string {
+  const fit = (suffix: string) => `${name.slice(0, max - suffix.length).replace(/_+$/, '')}${suffix}`;
+  let candidate = fit('');
+  for (let n = 2; used.has(candidate); n++) candidate = fit(`_${n}`);
   used.add(candidate);
   return candidate;
 }
@@ -395,7 +402,9 @@ function dimensionTable(dim: Dimension, tableName: string): PhysicalTable {
 function roleKeyName(role: string | null, subject: string): string {
   if (!role) return `${subject}_key`;
   const r = sqlName(role, subject);
-  return `_${r}_`.includes(`_${subject}_`) ? `${r}_key` : `${r}_${subject}_key`;
+  const name = `_${r}_`.includes(`_${subject}_`) ? `${r}_key` : `${r}_${subject}_key`;
+  // A long role and dimension name keep the _key ending, with room for a number if it is taken.
+  return name.length <= NAME_MAX ? name : `${name.slice(0, NAME_MAX - 6).replace(/_+$/, '')}_key`;
 }
 
 function factTable(
@@ -406,12 +415,21 @@ function factTable(
   const used = new Set<string>();
   const columns: PhysicalColumn[] = [];
   const subject = sqlName(displayName(process, 'fact'), 'fact');
+  // A dimension listed twice with the same role, or twice without one, is one use: one key column.
+  const uses = new Set<string>();
+  const firstUse = (dimensionId: Id, role: string | null) => {
+    const use = `${dimensionId}\n${role?.trim() ?? ''}`;
+    if (uses.has(use)) return false;
+    uses.add(use);
+    return true;
+  };
   for (const usage of process.dimensions) {
     const entry = dims.get(usage.dimensionId);
     if (!entry) continue;
     const { dimension, table } = entry;
     const dimSubject = sqlName(displayName(dimension, 'dimension'), 'dimension');
     if (!table) {
+      if (!firstUse(dimension.id, null)) continue;
       // Degenerate dimension: the identifier lives in the fact table itself.
       columns.push({
         name: columnName(displayName(dimension, 'reference'), subject, used),
@@ -425,7 +443,7 @@ function factTable(
       continue;
     }
     const roles = usage.roles.length ? usage.roles : [null];
-    for (const role of roles) {
+    for (const role of roles.filter((r) => firstUse(dimension.id, r))) {
       columns.push({
         name: uniqueName(roleKeyName(role, dimSubject), used),
         role: 'foreign-key',
@@ -475,13 +493,13 @@ export function physicalModel(project: KimballProject): PhysicalModel {
       dims.set(dim.id, { dimension: dim, table: null });
       continue;
     }
-    const table = dimensionTable(dim, uniqueName(`dim_${sqlName(displayName(dim, 'dimension'), 'dimension')}`, tableNames));
+    const table = dimensionTable(dim, uniqueName(`dim_${sqlName(displayName(dim, 'dimension'), 'dimension')}`, tableNames, TABLE_NAME_MAX));
     dims.set(dim.id, { dimension: dim, table });
     tables.push(table);
   }
 
   for (const p of project.processes) {
-    const name = uniqueName(`fact_${sqlName(displayName(p, 'process'), 'process')}`, tableNames);
+    const name = uniqueName(`fact_${sqlName(displayName(p, 'process'), 'process')}`, tableNames, TABLE_NAME_MAX);
     const table = factTable(p, name, dims);
     if (!table.columns.some((c) => c.role === 'foreign-key' || c.role === 'degenerate')) {
       notes.push(`${table.label} has no dimensions yet, so its fact table has no keys. Add dimensions in phase 6.`);

@@ -7,13 +7,16 @@ import {
   createMeasure,
   createProcess,
   createProject,
+  dbtSeedName,
   ddlScript,
   defaultQuery,
   distinctValues,
+  fromRequirementQuery,
   generateSampleData,
   indexAdvice,
   inferMeasureType,
   loadExample,
+  NAME_MAX,
   normalizeProject,
   physicalModel,
   prototypeFiles,
@@ -22,6 +25,7 @@ import {
   sqlLiteral,
   sqlName,
   tableToCsv,
+  toRequirementQuery,
   type KimballProject,
 } from './index';
 
@@ -87,6 +91,56 @@ describe('physicalModel', () => {
     const t = physicalModel(p).tables[0]!;
     expect(t.columns.map((c) => c.name)).toContain('customer_group');
     expect(t.columns.map((c) => c.name)).toContain('customer_group_2');
+  });
+
+  it('keeps names within 63 characters and table names short enough for their seed', () => {
+    const p = createProject('T');
+    const long = 'Customer account relationship history across every sales channel';
+    const dim = createDimension({ name: long, attributes: [{ id: 'a1', name: `${long} segment`, description: '', scdType: null }] });
+    p.dimensions.push(dim);
+    for (const suffix of ['by day', 'by week']) {
+      const roles = [`Primary ${long}`, `Secondary ${long}`, `Primary ${long} too`];
+      p.processes.push(createProcess({ name: `${long} ${suffix}`, dimensions: [{ dimensionId: dim.id, roles }] }));
+    }
+    const model = physicalModel(p);
+    const names = model.tables.map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const t of model.tables) {
+      expect(dbtSeedName(t.name).length, t.name).toBeLessThanOrEqual(NAME_MAX);
+      const columns = t.columns.map((c) => c.name);
+      expect(new Set(columns).size, t.name).toBe(columns.length);
+      for (const c of columns) expect(c.length, c).toBeLessThanOrEqual(NAME_MAX);
+    }
+    const keys = model.tables.find((t) => t.kind === 'fact')!.columns.filter((c) => c.role === 'foreign-key').map((c) => c.name);
+    expect(keys).toHaveLength(3);
+    for (const k of keys) expect(k).toMatch(/_key(_\d+)?$/);
+  });
+
+  it('makes one key per use when a dimension is listed twice', () => {
+    const p = createProject('T');
+    const store = createDimension({ name: 'Store' });
+    const date = createDimension({ name: 'Date' });
+    const order = createDimension({ name: 'Order number', kind: 'degenerate' });
+    p.dimensions.push(store, date, order);
+    p.processes.push(
+      createProcess({
+        name: 'Sales',
+        dimensions: [
+          { dimensionId: store.id, roles: [] },
+          { dimensionId: store.id, roles: [] },
+          { dimensionId: date.id, roles: ['Order date'] },
+          { dimensionId: date.id, roles: [' Order date', 'Ship date'] },
+          { dimensionId: order.id, roles: [] },
+          { dimensionId: order.id, roles: [] },
+        ],
+      }),
+    );
+    const model = physicalModel(p);
+    const fact = model.tables.find((t) => t.kind === 'fact')!;
+    expect(fact.columns.map((c) => c.name)).toEqual(['store_key', 'order_date_key', 'ship_date_key', 'order_number']);
+    // So a saved query names one column, and reads back as the same question.
+    const query = { fact: fact.name, measure: null, aggregate: 'count' as const, groupBy: [{ column: 'store_key', attribute: 'store_name' }] };
+    expect(fromRequirementQuery(model, toRequirementQuery(model, query)!)).toMatchObject(query);
   });
 
   it('avoids words reserved in SQL Server and Snowflake', () => {
