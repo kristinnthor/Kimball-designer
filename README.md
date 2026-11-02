@@ -58,7 +58,7 @@ At the end you have an agreed, documented high-level dimensional design, the blu
 - **Traceability and honest unknowns:** every business question linked to a process; assumptions and open questions recorded with owners.
 - **A head start on the build:** grain, fact table types, facts with additivity and dimensions with roles feed straight into the detailed design, and the prototype gives you a first CREATE TABLE script with index advice.
 
-The [user guide](docs/USER-GUIDE.md) explains each deliverable: what's in it, who uses it and why it matters. It also covers the ten phases, step-by-step demos, the CLI and an FAQ. The same guide is in the app under **Help**.
+The [user guide](docs/USER-GUIDE.md) explains each deliverable: what's in it, who uses it and why it matters. It also covers the eleven phases, step-by-step demos, the CLI and an FAQ. The same guide is in the app under **Help**.
 
 ## Screenshots
 
