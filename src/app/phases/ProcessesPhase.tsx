@@ -76,7 +76,7 @@ export function ProcessesPhase() {
                     placeholder={pick(SOURCE_EXAMPLES, i)}
                   />
                   {project.requirements.length > 0 && (
-                    <div className="field">
+                    <div className="field" role="group" aria-label={`${displayName(p, 'This process')} answers requirements`}>
                       <span className="field-label">Answers requirements</span>
                       <div className="chips">
                         {project.requirements.map((r, ri) => {

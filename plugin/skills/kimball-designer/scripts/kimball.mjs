@@ -1341,6 +1341,8 @@ ${body}
 }
 
 // src/core/bubble.ts
+var LEGEND_KEY_W = 390;
+var LEGEND_ADDITIVITY_W = 280;
 var PAD = 24;
 var TOP = 88;
 var CENTER_R = 74;
@@ -1362,7 +1364,8 @@ function layoutBubble(project, process2, options = {}) {
   const d2 = twoRings ? Math.max(d1 + 2 * r + 10, outerCount * chord / (2 * Math.PI)) : d1;
   const extent = n === 0 ? CENTER_R + 40 : (twoRings ? d2 : d1) + r + ROLE_LABEL_SPACE;
   const size = Math.ceil(2 * extent);
-  const cx = PAD + size / 2;
+  const diagramWidth = showFacts ? size : Math.max(size, LEGEND_KEY_W);
+  const cx = PAD + diagramWidth / 2;
   const cy = TOP + size / 2;
   const nodes = [...merged.entries()].map(([dimensionId, roles], i) => {
     const dim = project.dimensions.find((d) => d.id === dimensionId);
@@ -1386,11 +1389,15 @@ function layoutBubble(project, process2, options = {}) {
   });
   const factRows = Math.max(1, process2.facts.length);
   const panel = showFacts ? { x: PAD + size + 24, y: TOP, width: PANEL_W, height: 56 + factRows * 24 } : null;
-  const width = panel ? panel.x + panel.width + PAD : size + 2 * PAD;
+  const width = panel ? panel.x + panel.width + PAD : diagramWidth + 2 * PAD;
   const grainLines = wrapText(process2.grain.trim() || "Grain not declared yet", Math.floor((width - 2 * PAD - 60) / 7.4), 3);
   const bodyBottom = Math.max(TOP + size, panel ? panel.y + panel.height : 0);
   const footerY = bodyBottom + 20;
-  const height = footerY + 30 + grainLines.length * 18 + 40;
+  const oneLine = width - 2 * PAD >= LEGEND_KEY_W + 24 + LEGEND_ADDITIVITY_W;
+  const extraLine = panel && !oneLine ? 18 : 0;
+  const height = footerY + 30 + grainLines.length * 18 + 40 + extraLine;
+  const keyY = height - 18 - extraLine;
+  const legend = { keyY, additivityY: panel ? oneLine ? keyY : keyY + 18 : null };
   return {
     width: Math.ceil(width),
     height: Math.ceil(height),
@@ -1401,7 +1408,8 @@ function layoutBubble(project, process2, options = {}) {
     nodes,
     panel,
     grainLines,
-    footerY
+    footerY,
+    legend
   };
 }
 var round = (v) => Math.round(v * 10) / 10;
@@ -1418,7 +1426,7 @@ function bubbleToSvg(project, process2, options = {}) {
   const t = (s) => escapeXml(s);
   const dimList = L.nodes.map((nd) => `${nd.label}${nd.roles.length ? ` (${nd.roles.join(", ")})` : ""}${nd.conformed ? " [conformed]" : ""}`).join("; ");
   out.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.width} ${L.height}" width="${L.width}" height="${L.height}" role="img" aria-labelledby="kd-title kd-desc" font-family="${t(FONT_SANS)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.width} ${L.height}" width="${L.width}" height="${L.height}" role="${options.interactive ? "group" : "img"}" aria-labelledby="kd-title kd-desc" font-family="${t(FONT_SANS)}">`,
     `<title id="kd-title">Bubble diagram: ${t(name)}</title>`,
     `<desc id="kd-desc">Business process ${t(name)}${typeLabel ? ` (${t(typeLabel.toLowerCase())} fact table)` : ""}. Grain: ${t(process2.grain || "not declared")}. Dimensions: ${t(dimList || "none")}.</desc>`
   );
@@ -1449,10 +1457,13 @@ function bubbleToSvg(project, process2, options = {}) {
     const lineH = 15;
     const startY = nd.y - (nd.lines.length - 1) * lineH / 2 + 4.5;
     out.push(
-      `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}">`,
+      options.interactive ? (
+        // The name contains the visible text (label, then roles) so speech input and screen readers agree.
+        `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}" tabindex="0" role="button" aria-label="Open dimension ${t(nd.label)}${nd.roles.length ? ` ${t(nd.roles.join(" · "))}` : ""}">`
+      ) : `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}">`,
       `<title>${t(nd.label)}${nd.conformed ? " — conformed" : ""}${nd.roles.length ? ` — roles: ${t(nd.roles.join(", "))}` : ""}</title>`,
       `<circle cx="${nd.x}" cy="${nd.y}" r="${nd.r}" fill="${nd.conformed ? c.conformedSoft : c.dimSoft}" stroke="${stroke}" stroke-width="${nd.conformed ? 3 : 2}"${nd.kind === "degenerate" ? ' stroke-dasharray="5 4"' : ""}/>`,
-      `<text text-anchor="middle" font-size="12.5" font-weight="600" fill="${c.ink}">` + nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round(startY + i * lineH)}">${t(ln)}</tspan>`).join("") + "</text>"
+      `<text text-anchor="middle" font-size="12.5" font-weight="600" fill="${c.ink}">` + nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round(startY + i * lineH)}">${t(ln)}</tspan>`).join(" ") + "</text>"
     );
     if (nd.roles.length) {
       out.push(
@@ -1498,13 +1509,13 @@ function bubbleToSvg(project, process2, options = {}) {
     `<text x="${PAD}" y="${L.footerY + 28}" font-size="11" font-weight="700" fill="${c.factStrong}" letter-spacing="0.08em">GRAIN</text>`,
     `<text font-family="${t(FONT_MONO)}" font-size="12.5" fill="${process2.grain.trim() ? c.ink : c.muted}">` + L.grainLines.map((ln, i) => `<tspan x="${PAD + 60}" y="${L.footerY + 28 + i * 18}">${t(ln)}</tspan>`).join("") + "</text>"
   );
-  const ly = L.height - 18;
+  const ly = L.legend.keyY;
   out.push(
     `<g font-size="11" fill="${c.muted}">`,
     `<circle cx="${PAD + 6}" cy="${ly - 4}" r="6" fill="${centerFill}"/><text x="${PAD + 18}" y="${ly}">Business process</text>`,
     `<circle cx="${PAD + 132}" cy="${ly - 4}" r="6" fill="${c.dimSoft}" stroke="${c.dim}" stroke-width="2"/><text x="${PAD + 144}" y="${ly}">Dimension</text>`,
     `<circle cx="${PAD + 228}" cy="${ly - 4}" r="6" fill="${c.conformedSoft}" stroke="${c.conformed}" stroke-width="2.5"/><text x="${PAD + 240}" y="${ly}">Conformed (2+ processes)</text>`,
-    L.panel ? `<text x="${L.width - PAD}" y="${ly}" text-anchor="end">A additive · SA semi-additive · NA non-additive</text>` : "",
+    L.legend.additivityY !== null ? L.legend.additivityY === ly ? `<text x="${L.width - PAD}" y="${ly}" text-anchor="end">A additive · SA semi-additive · NA non-additive</text>` : `<text x="${PAD}" y="${L.legend.additivityY}">A additive · SA semi-additive · NA non-additive</text>` : "",
     "</g>",
     "</svg>"
   );

@@ -75,14 +75,13 @@ export function Header({ onToggleCoach, coachOpen }: { onToggleCoach: () => void
             placeholder="Untitled project"
             onChange={(e) => update((d) => void (d.meta.name = e.target.value), { coalesce: 'meta.name' })}
           />
-          <span
-            className={`sync ${sync.state}`}
-            role="status"
-            aria-live="polite"
-            title={sync.message ?? (server ? sync.filePath ?? '' : 'Autosaved in this browser. Export to keep a file.')}
-          >
+          <span className={`sync ${sync.state}`} title={sync.message ?? (server ? sync.filePath ?? '' : 'Autosaved in this browser. Export to keep a file.')}>
             <span className="dot" />
             <span className="sync-label">{syncLabel}</span>
+          </span>
+          {/* Announce only problems; "Saving…/Saved" after every pause in typing would drown out everything else. */}
+          <span className="sr-only" role="status" aria-live="polite">
+            {sync.state === 'error' ? `Not saved. ${sync.message ?? ''}` : ''}
           </span>
         </div>
         <div className="header-actions">

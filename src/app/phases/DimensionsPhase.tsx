@@ -217,7 +217,7 @@ export function DimensionsPhase() {
                     {p.grain}
                   </p>
                 )}
-                <div className="chips">
+                <div className="chips" role="group" aria-label={`Dimensions used by ${displayName(p, 'this process')}`}>
                   {project.dimensions.map((dim) => {
                     const on = p.dimensions.some((u) => u.dimensionId === dim.id);
                     return (

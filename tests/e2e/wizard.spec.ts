@@ -82,7 +82,7 @@ test('a developer goes from kickoff to bus matrix and exports everything (offlin
   await expect(page.getByLabel('SQL for this question')).toContainText('FROM fact_orders AS f');
 
   // Autosave status is shown (persistence across reloads is covered by the served-mode test).
-  await expect(page.getByRole('status').filter({ hasText: /Saved in this browser|storage is unavailable/ }).first()).toBeVisible();
+  await expect(page.locator('.sync', { hasText: /Saved in this browser|storage is unavailable/ })).toBeVisible();
 });
 
 test('an example project loads and every phase renders', async ({ page }) => {

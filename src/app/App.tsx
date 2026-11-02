@@ -45,6 +45,19 @@ export function App() {
     else if (!main?.contains(document.activeElement) || document.activeElement === document.body) main?.focus({ preventScroll: true });
   }, [phase]);
 
+  // Below 1180 px the coach is an overlay over the form: Escape closes it (without changing the saved preference).
+  useEffect(() => {
+    if (!coachOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !window.matchMedia('(max-width: 1180px)').matches) return;
+      setCoachOpen(false);
+      // After the re-render the header button is labelled "Show coach"; return focus to it.
+      setTimeout(() => document.querySelector<HTMLButtonElement>('button[aria-label="Show coach"]')?.focus(), 0);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [coachOpen]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
