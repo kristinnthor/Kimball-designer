@@ -1,9 +1,10 @@
 import { ddlScript, indexAdviceToMarkdown } from './ddl';
 import { defaultQuery, preferredAttribute, querySql } from './explore';
-import { displayName, optionLabel, physicalSettings, SQL_DIALECTS, type KimballProject, type PhysicalSettings, type SqlDialect } from './model';
+import { displayName, optionLabel, physicalSettings, PRIORITIES, SQL_DIALECTS, type KimballProject, type PhysicalSettings, type SqlDialect } from './model';
 import { physicalModel } from './physical';
 import { generateSampleData, seedScript, tableToCsv } from './sampledata';
 import { slugify } from './text';
+import { requirementAnswers } from './traceability';
 import { APP_VERSION } from './version';
 
 /**
@@ -50,9 +51,22 @@ function compose(project: KimballProject): string {
   ].join('\n');
 }
 
-function exampleQueries(project: KimballProject, dialect: SqlDialect): string {
+/** One comment line: SQL comments end at the line break. */
+const comment = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+export function exampleQueries(project: KimballProject, dialect: SqlDialect): string {
   const model = physicalModel(project);
-  const out = [`-- Example queries for ${displayName(project.meta, 'Untitled project')} (${optionLabel(SQL_DIALECTS, dialect)}).`, '-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements.'];
+  const out = [`-- Queries for ${displayName(project.meta, 'Untitled project')} (${optionLabel(SQL_DIALECTS, dialect)}).`];
+  const answered = requirementAnswers(project, model).filter((a) => a.query);
+  if (answered.length) {
+    out.push('', '-- ─── Requirements: the saved query that answers each one ───');
+    for (const a of answered) {
+      const r = a.requirement;
+      out.push('', `-- ${a.label} (${optionLabel(PRIORITIES, r.priority)}): ${comment(r.statement) || 'untitled'}`, `-- ${comment(a.description!)}`, querySql(model, a.query!, dialect));
+    }
+    out.push('', '-- ─── Examples ───');
+  }
+  out.push('-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements.');
   for (const fact of model.tables.filter((t) => t.kind === 'fact')) {
     const q = defaultQuery(model, fact);
     out.push('', `-- ${fact.label}${fact.grain ? `: ${fact.grain}` : ''}`, querySql(model, q, dialect));
@@ -100,7 +114,7 @@ To start again after changing the design, write a new bundle and run \`docker co
 | \`initdb/02-data.sql\` | The sample rows as INSERT statements |
 | \`schema.sql\` | CREATE TABLE script for ${dialect}, your target platform |
 | \`index-recommendations.md\` | Which keys and indexes to create, now and later, and why |
-| \`queries.sql\` | Example star-join queries |
+| \`queries.sql\` | The saved queries that answer your requirements, and example star-join queries |
 | \`data/*.csv\` | The sample rows as CSV, to load anywhere |
 
 ## Before you build for real

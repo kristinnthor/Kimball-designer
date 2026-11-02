@@ -87,7 +87,7 @@ The written record of everything agreed, ready for sign-off or a pull request. *
 
 - Overview: purpose, sponsor, scope in and out, success criteria.
 - Stakeholders and interview status.
-- Business requirements with priority, KPIs, who raised them and which processes answer them.
+- Business requirements with priority, KPIs, who raised them, which processes answer them and, once you use the prototype, the query that answers each one.
 - Each business process with grain, fact table type, dimensions, facts and its bubble diagram.
 - The dimension catalogue with kinds, key attributes, hierarchies and where each is used.
 - The bus matrix, the prioritisation, assumptions and open questions.
@@ -113,7 +113,7 @@ Each business process plotted by business value against feasibility, both scored
 
 #### Validation report
 
-The model checked against 16 Kimball best-practice rules, each with a hint on how to fix it. *(In the UI, `kimball validate` (text or `--json`))*
+The model checked against 18 Kimball best-practice rules, each with a hint on how to fix it. *(In the UI, `kimball validate` (text or `--json`))*
 
 - Errors (broken references, missing names), warnings (no grain, no date dimension, unused dimensions) and notes.
 - A link from each finding to the phase where you fix it.
@@ -157,6 +157,7 @@ Your design as a star schema filled with made-up rows, a CREATE TABLE script wit
 
 - One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).
 - Sample rows you can group and filter in the browser, with the matching SQL.
+- The question that answers each requirement, saved with it: the requirements document shows it and `queries.sql` gets its SQL.
 - CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).
 - A Docker Compose sandbox that loads the tables and data on first start.
 
@@ -182,7 +183,7 @@ A compact progress summary you can paste into Claude to continue the work there.
 
 - Build the conformed dimensions first: the columns with the most marks in the bus matrix.
 - Pick the top process on the prioritisation grid and do its detailed design: every attribute, slowly changing dimension strategy and source-to-target mapping.
-- Try it in phase 11 *Prototype* first: query the sample data, check each must-have requirement can be answered, and start from the generated CREATE TABLE script.
+- Try it in phase 11 *Prototype* first: query the sample data, save the question that answers each must-have requirement, and start from the generated CREATE TABLE script.
 - Build and release that one process end to end, then the next row of the matrix.
 - Keep the project file in your repository and update it when scope changes, so the diagrams stay current.
 
@@ -209,7 +210,7 @@ Kimball Designer covers the high-level design and a first physical prototype. It
 | 8 | **Bubble diagrams** | Review each process as a bubble diagram with its stakeholders. | Nothing new: diagrams are drawn from your model. Click a bubble to edit it. | Every process has a diagram (at least one dimension). |
 | 9 | **Bus matrix** | Check the processes against the shared dimensions and fill gaps. | Usage marks, toggled directly in the grid. | Every dimension is used by a process. |
 | 10 | **Review & export** | Resolve the findings and export the deliverables. | Fixes; then download the files or hand off to Claude. | There are no errors or warnings. |
-| 11 | **Prototype** | Explore the design as tables filled with sample data, then download the CREATE TABLE script, index advice and a Docker sandbox. | Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values. | Every process has a grain, dimensions and facts, so it can be built as a table. |
+| 11 | **Prototype** | Explore the design as tables filled with sample data, save the question that answers each requirement, then download the CREATE TABLE script, index advice and a Docker sandbox. | The query that answers each requirement. Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values. | Every process has a grain, dimensions and facts, so it can be built as a table. |
 
 ## Demos
 
@@ -390,11 +391,13 @@ Errors must be fixed, warnings usually should be, and notes are judgement calls.
 | `KD106` | warning | Every requirement is linked to a process |
 | `KD107` | warning | Names are unique |
 | `KD108` | warning | Every process has a date dimension |
+| `KD109` | warning | Saved requirement queries match the design |
 | `KD201` | info | Grain is phrased "One row per …" |
 | `KD202` | info | Dimension is used by a single process |
 | `KD203` | info | Accumulating snapshots have several date roles |
 | `KD204` | info | Planned interviews are not done yet |
 | `KD205` | info | Process has no value/feasibility score |
+| `KD206` | info | Must-have requirements are answered by a query |
 
 ## Keyboard shortcuts
 

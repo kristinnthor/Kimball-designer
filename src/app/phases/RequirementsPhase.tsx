@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import {
   PRIORITIES,
   createAssumption,
   createOpenQuestion,
   createRequirement,
   displayName,
+  requirementAnswers,
 } from '../../core';
 import { IconPlus } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
@@ -16,6 +18,7 @@ import { update, useProject } from '../store/store';
 
 export function RequirementsPhase() {
   const project = useProject();
+  const answers = useMemo(() => (project.requirements.some((r) => r.query) ? requirementAnswers(project) : null), [project]);
   const add = () => {
     const r = createRequirement();
     markAdded(r.id);
@@ -104,6 +107,12 @@ export function RequirementsPhase() {
                       })}
                     </div>
                   </div>
+                )}
+                {answers?.[i]?.description && (
+                  <p className="hint">
+                    Answered in the prototype by: {answers[i].description}
+                    {answers[i].status === 'outdated' && ' (no longer matches the design: save it again in phase 11)'}
+                  </p>
                 )}
               </div>
             </div>

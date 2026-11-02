@@ -154,6 +154,12 @@ function defaultPhysicalSettings(createdAt) {
 function physicalSettings(project) {
   return project.physical ?? defaultPhysicalSettings(project.meta.createdAt);
 }
+function dimensionById(project, id2) {
+  return project.dimensions.find((d) => d.id === id2);
+}
+function processById(project, id2) {
+  return project.processes.find((p) => p.id === id2);
+}
 function processesUsing(project, dimensionId) {
   return project.processes.filter((p) => p.dimensions.some((u) => u.dimensionId === dimensionId));
 }
@@ -204,6 +210,8 @@ var ADDITIVITY2 = ["additive", "semi-additive", "non-additive"];
 var DIM_KINDS = ["standard", "date", "degenerate", "junk"];
 var DATA_TYPES = ["text", "integer", "decimal", "date", "boolean"];
 var DIALECTS = ["postgres", "sqlserver", "snowflake"];
+var AGGREGATES = ["sum", "avg", "min", "max", "count"];
+var QUERY_GROUPS_MAX = 2;
 var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 var isoDate = (v) => {
   const s = str(v).trim();
@@ -252,8 +260,40 @@ function normalizeStakeholder(o) {
     notes: str(o.notes)
   };
 }
+function queryColumn(v) {
+  if (!isObj(v) || !safeId(v.dimensionId)) return null;
+  const out = { dimensionId: safeId(v.dimensionId) };
+  const role = str(v.role).trim();
+  if (role) out.role = role;
+  if (safeId(v.attributeId)) out.attributeId = safeId(v.attributeId);
+  else if (str(v.column).trim()) out.column = str(v.column).trim();
+  return out;
+}
+function normalizeQuery(v) {
+  if (!isObj(v) || !safeId(v.processId)) return void 0;
+  const measureId = safeId(v.measureId);
+  if (v.aggregate != null && !AGGREGATES.includes(v.aggregate)) return void 0;
+  const aggregate = v.aggregate ?? (measureId ? "sum" : "count");
+  if (aggregate !== "count" && !measureId) return void 0;
+  const groups = v.groupBy ?? [];
+  if (!Array.isArray(groups) || groups.length > QUERY_GROUPS_MAX) return void 0;
+  const groupBy = groups.map(queryColumn);
+  if (groupBy.some((c) => c === null)) return void 0;
+  const query = {
+    processId: safeId(v.processId),
+    ...aggregate !== "count" ? { measureId } : {},
+    aggregate,
+    groupBy
+  };
+  if (v.filter != null) {
+    const column = isObj(v.filter) ? queryColumn(v.filter.column) : null;
+    if (!column || !isObj(v.filter)) return void 0;
+    query.filter = { column, value: str(v.filter.value) };
+  }
+  return query;
+}
 function normalizeRequirement(o) {
-  return {
+  const requirement = {
     id: id(o.id, ID_PREFIX.requirement),
     statement: str(o.statement),
     kpis: strList(o.kpis),
@@ -262,6 +302,9 @@ function normalizeRequirement(o) {
     processIds: idList(o.processIds),
     notes: str(o.notes)
   };
+  const query = normalizeQuery(o.query);
+  if (query) requirement.query = query;
+  return requirement;
 }
 function normalizeMeasure(o) {
   const measure = {
@@ -558,7 +601,7 @@ function dimensionTable(dim, tableName) {
       dataType,
       size: dataType === "text" ? TEXT(part ? 20 : 100) : dataType === "decimal" ? { precision: 18, scale: 4 } : void 0,
       nullable: !part,
-      source: part && !a.sampleValues?.length ? { kind: "date-part", part: part.part } : { kind: "attribute", attribute: a },
+      source: part && !a.sampleValues?.length ? { kind: "date-part", part: part.part, attributeId: a.id } : { kind: "attribute", attribute: a },
       note: [a.description.trim(), a.scdType != null && !calendar ? `SCD type ${a.scdType}` : ""].filter(Boolean).join(" · ") || (part ? "Calendar attribute" : "")
     });
     if (a.scdType === 2) scd2 = true;
@@ -688,8 +731,719 @@ function physicalModel(project) {
   if (project.processes.length === 0) notes.push("Add business processes to get fact tables.");
   return { tables, notes };
 }
+function attributeIdOf(column) {
+  if (column.source.kind === "attribute") return column.source.attribute.id;
+  if (column.source.kind === "date-part") return column.source.attributeId;
+  return void 0;
+}
 function isReadyToBuild(process2) {
   return process2.grain.trim().length > 0 && process2.dimensions.length > 0 && (process2.facts.length > 0 || process2.factTableType === "factless");
+}
+
+// src/core/text.ts
+var XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+function escapeXml(s) {
+  return s.replace(XML_INVALID, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function mdCell(s) {
+  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();
+}
+function mdInline(s) {
+  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/([`*_[\]|])/g, "\\$1").replace(/\s*\r?\n\s*/g, " ").trim().replace(/^([#+-])/, "\\$1").replace(/^(\d+)([.)])/, "$1\\$2");
+}
+function mdCode(s) {
+  const text = s.replace(/\s*\r?\n\s*/g, " ").trim();
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longest + 1);
+  const pad2 = text.startsWith("`") || text.endsWith("`") ? " " : "";
+  return `${fence}${pad2}${text}${pad2}${fence}`;
+}
+function csvCell(s) {
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+function slugify(s, fallback = "item") {
+  const slug = s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60).replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
+function wrapText(text, maxWidth, maxLines) {
+  const maxChars = Math.max(2, Math.floor(maxWidth));
+  const words = text.trim().split(/\s+/).filter(Boolean).map((w) => Array.from(w));
+  const lines = [];
+  let current = [];
+  const push = (line) => lines.push(line.join(""));
+  for (let word of words) {
+    while (word.length > maxChars) {
+      if (current.length) {
+        push(current);
+        current = [];
+      }
+      push([...word.slice(0, maxChars - 1), "-"]);
+      word = word.slice(maxChars - 1);
+    }
+    if (!current.length) current = word;
+    else if (current.length + 1 + word.length <= maxChars) current = [...current, " ", ...word];
+    else {
+      push(current);
+      current = word;
+    }
+  }
+  if (current.length) push(current);
+  if (lines.length > maxLines) {
+    const kept = lines.slice(0, maxLines);
+    const last = Array.from(kept[maxLines - 1]);
+    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1).join("") : last.join("")) + "…";
+    return kept;
+  }
+  return lines;
+}
+function truncate(s, max) {
+  const chars = Array.from(s);
+  return chars.length > max ? chars.slice(0, max - 1).join("") + "…" : s;
+}
+
+// src/core/sampledata.ts
+var DEFAULT_FACT_ROWS = 1e3;
+var MAX_SAMPLE_DAYS = 3660;
+var FAR_FUTURE = "9999-12-31";
+function hash32(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function random(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var int = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
+var choose = (rng, list2) => list2[Math.floor(rng() * list2.length)];
+var round = (n, decimals) => Number(n.toFixed(decimals));
+var skewed = (rng, n) => Math.min(n - 1, Math.floor(Math.pow(rng(), 1.6) * n));
+var DAY = 864e5;
+var toTime = (iso) => Date.parse(`${iso}T00:00:00Z`);
+var toIso = (t) => new Date(t).toISOString().slice(0, 10);
+var dateKey = (iso) => Number(iso.replace(/-/g, ""));
+function sampleDates(settings) {
+  const from = toTime(settings.dateFrom);
+  const to = Math.min(toTime(settings.dateTo), from + (MAX_SAMPLE_DAYS - 1) * DAY);
+  const out = [];
+  for (let t = from; t <= to; t += DAY) out.push(toIso(t));
+  return out.length ? out : [settings.dateFrom];
+}
+var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+  return Math.ceil(((t.getTime() - yearStart) / DAY + 1) / 7);
+}
+var HOLIDAYS = /* @__PURE__ */ new Set(["01-01", "05-01", "12-24", "12-25", "12-26", "12-31"]);
+function datePart(iso, part, attributeName) {
+  const d = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const q = Math.floor(m / 3) + 1;
+  switch (part) {
+    case "date":
+      return iso;
+    case "day-of-week":
+      return WEEKDAYS[d.getUTCDay()];
+    case "day-of-month":
+      return d.getUTCDate();
+    case "week":
+      return isoWeek(d);
+    case "month-number":
+      return m + 1;
+    case "month-name":
+      return MONTHS[m];
+    case "quarter":
+      return `Q${q}`;
+    case "year":
+      return y;
+    case "year-month":
+      return iso.slice(0, 7);
+    case "weekend":
+      return d.getUTCDay() === 0 || d.getUTCDay() === 6;
+    case "holiday":
+      return HOLIDAYS.has(iso.slice(5));
+    case "fiscal-year":
+      return y;
+    case "fiscal-period": {
+      const fy = `FY${String(y).slice(2)}`;
+      if (/week/i.test(attributeName)) return `${fy} W${String(isoWeek(d)).padStart(2, "0")}`;
+      if (/quarter/i.test(attributeName)) return `${fy} Q${q}`;
+      return `${fy} P${String(m + 1).padStart(2, "0")}`;
+    }
+  }
+}
+var FIRST = ["Anna", "Jón", "Sara", "Ólafur", "Maria", "David", "Emma", "Lukas", "Sofia", "Noah", "Elena", "Omar", "Ingrid", "Kenji", "Chloe", "Mateo", "Aisha", "Henrik", "Lea", "Tomas"];
+var LAST = ["Jónsdóttir", "Smith", "García", "Müller", "Hansen", "Rossi", "Novak", "Kim", "Silva", "Dubois", "Larsen", "Nowak", "Okafor", "Sato", "Stefánsson", "Brown", "Costa", "Berg", "Ali", "Moreau"];
+var CITIES = ["Reykjavík", "Akureyri", "Oslo", "Copenhagen", "Stockholm", "Berlin", "Amsterdam", "Dublin", "London", "Lisbon", "Madrid", "Paris", "Vienna", "Warsaw", "Prague", "Helsinki"];
+var COUNTRIES = ["Iceland", "Norway", "Denmark", "Sweden", "Germany", "Netherlands", "Ireland", "United Kingdom", "Portugal", "Spain", "France", "Austria"];
+var POOLS = [
+  [/\bcity|town\b/i, CITIES],
+  [/\bcountry|nation\b/i, COUNTRIES],
+  [/\bregion|district|territory|area\b/i, ["North", "South", "East", "West", "Central"]],
+  [/\bsegment\b/i, ["Consumer", "Small business", "Mid-market", "Enterprise"]],
+  [/\bstatus\b/i, ["Active", "Inactive", "Pending", "Closed"]],
+  // Before "band": an age band is ages, not tiers.
+  [/\bage\b/i, ["18–24", "25–34", "35–44", "45–54", "55–64", "65+"]],
+  [/\btier|level|band\b/i, ["Gold", "Silver", "Bronze"]],
+  [/\bchannel\b/i, ["Store", "Online", "Mobile app", "Partner", "Phone"]],
+  [/\bcolou?r\b/i, ["Black", "White", "Red", "Blue", "Green", "Grey"]],
+  [/\bsize\b/i, ["XS", "S", "M", "L", "XL"]],
+  [/\bpriority|urgency\b/i, ["Low", "Medium", "High", "Urgent"]],
+  [/\bbrand\b/i, ["Northwind", "Contoso", "Fabrikam", "Tailspin", "Litware", "Proseware", "Wingtip", "Adventure Works"]],
+  [/\bcategory|class|group|family\b/i, ["Grocery", "Household", "Personal care", "Beverages", "Snacks", "Frozen", "Bakery", "Dairy"]],
+  [/\bdepartment|division|team|unit\b/i, ["Fresh", "Ambient", "Non-food", "Electronics", "Home"]],
+  [/\bformat\b/i, ["Hypermarket", "Supermarket", "Convenience", "Online"]],
+  [/\bindustry|sector\b/i, ["Retail", "Manufacturing", "Healthcare", "Finance", "Education", "Technology", "Logistics"]],
+  [/\bjob|title|role|position|specialty\b/i, ["Cashier", "Store manager", "Shift lead", "Stock clerk", "Sales associate"]],
+  [/\bcurrency\b/i, ["EUR", "USD", "ISK", "GBP", "DKK"]],
+  [/\bcarrier|courier\b/i, ["Póstur", "DHL", "UPS", "FedEx", "Local courier"]],
+  [/\bmode|method\b/i, ["Standard", "Express", "Collect", "Card", "Cash", "Mobile pay"]],
+  [/\bedition|plan\b/i, ["Free", "Starter", "Team", "Business", "Enterprise"]],
+  [/\bperiod|frequency|billing\b/i, ["Monthly", "Quarterly", "Yearly"]],
+  [/\bdecision|outcome|result\b/i, ["Approved", "Denied", "Pending"]],
+  [/\breason|cause\b/i, ["Price", "Quality", "No longer needed", "Moved", "Other"]],
+  [/\btype|kind\b/i, ["Type A", "Type B", "Type C", "Type D"]],
+  [/\bgender|sex\b/i, ["Female", "Male", "Other", "Unknown"]]
+];
+var PRODUCT_ADJ = ["Classic", "Organic", "Fresh", "Premium", "Everyday", "Mini", "Family", "Light"];
+var PRODUCT_NOUN = ["Coffee", "Yoghurt", "Bread", "Pasta", "Shampoo", "Detergent", "Juice", "Cheese", "Crisps", "Tea", "Apples", "Chocolate"];
+var COMPANY_A = ["Nordic", "Atlantic", "Blue", "Summit", "Arctic", "Green", "Silver", "Prime"];
+var COMPANY_B = ["Foods", "Supply", "Trading", "Logistics", "Partners", "Systems", "Group", "Labs"];
+var SITE_SUFFIX = ["Centre", "Mall", "Harbour", "North", "South", "Airport"];
+var SEASONS = ["Spring", "Summer", "Autumn", "Winter", "Weekend", "Holiday", "Back to school", "Flash"];
+var OFFERS = ["sale", "deal", "offer", "discount", "bundle"];
+var PEOPLE = /customer|client|member|patient|subscriber|employee|staff|agent|cashier|person|user|provider|doctor|manager|contact|buyer|seller|rep\b/i;
+var COMPANIES = /supplier|vendor|employer|company|organi[sz]ation|account|partner|carrier|manufacturer|payer|pharmacy/i;
+var SITES = /store|location|branch|site|warehouse|shop|outlet|office|clinic|hospital/i;
+var PRODUCTS = /product|item|sku|article|goods|drug|feature/i;
+var PROMOS = /promotion|campaign|offer|coupon/i;
+function entityName(subject, i, rng) {
+  if (PEOPLE.test(subject) && !COMPANIES.test(subject)) return `${FIRST[(i * 7 + int(rng, 0, 19)) % 20]} ${LAST[(i * 3 + Math.floor(i / 20)) % 20]}`;
+  if (COMPANIES.test(subject)) return `${COMPANY_A[i % 8]} ${COMPANY_B[Math.floor(i / 8) % 8]}${i >= 64 ? ` ${Math.floor(i / 64) + 1}` : ""}`;
+  if (SITES.test(subject)) return `${CITIES[i % CITIES.length]} ${SITE_SUFFIX[Math.floor(i / CITIES.length) % SITE_SUFFIX.length]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
+  if (PRODUCTS.test(subject)) return `${PRODUCT_ADJ[(5 * Math.floor(i / 12) + i) % 8]} ${PRODUCT_NOUN[i % 12]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
+  if (PROMOS.test(subject)) return `${SEASONS[i % 8]} ${OFFERS[Math.floor(i / 8) % 5]}${i >= 40 ? ` ${Math.floor(i / 40) + 1}` : ""}`;
+  return `${subject.replace(/\b\w/g, (c) => c.toUpperCase())} ${i + 1}`;
+}
+function codePrefix(name) {
+  const word = name.split(/[_\s-]+/).find((w) => /[a-z]/i.test(w) && !/^(the|a|an)$/i.test(w)) ?? "ID";
+  return word.slice(0, 3).toUpperCase();
+}
+var pad = (n, width = 5) => String(n).padStart(width, "0");
+function poolFor(attributeName) {
+  return POOLS.find(([re]) => re.test(attributeName))?.[1];
+}
+function attributeValue(col, table, i, rng, level) {
+  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
+  const name = attribute?.name ?? col.name.replace(/_/g, " ");
+  const samples = attribute?.sampleValues;
+  if (samples?.length) {
+    const nameLike = /name|description|title/i.test(name);
+    const raw = level !== void 0 ? samples[level % samples.length] : nameLike ? samples[i % samples.length] : choose(rng, samples);
+    return typed(raw, col.dataType);
+  }
+  switch (col.dataType) {
+    case "boolean":
+      return rng() < 0.3;
+    case "date":
+      return toIso(toTime("2015-01-01") + int(rng, 0, 3650) * DAY);
+    case "integer":
+      return /year/i.test(name) ? int(rng, 2010, 2025) : /age/i.test(name) ? int(rng, 18, 90) : int(rng, 1, 100);
+    case "decimal":
+      return /lat/i.test(name) ? round(40 + rng() * 25, 5) : /lon|lng/i.test(name) ? round(-25 + rng() * 45, 5) : round(rng() * 100, 2);
+    case "text":
+      break;
+  }
+  if (/e-?mail/i.test(name)) return `${FIRST[i % 20].toLowerCase()}.${pad(i + 1, 4)}@example.com`.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  if (/phone|mobile/i.test(name)) return `+354 555 ${pad(int(rng, 0, 9999), 4)}`;
+  if (/(^|\s)(name|description|title)$/i.test(name) || name.toLowerCase() === table.label.toLowerCase()) {
+    return entityName(`${table.label} ${name}`, i, rng);
+  }
+  if (/\b(id|code|number|no|sku|npi|ndc)\b/i.test(name)) return `${codePrefix(name)}-${pad(i + 1)}`;
+  const pool = poolFor(name);
+  if (pool) {
+    if (level === void 0) return choose(rng, pool);
+    return level < pool.length ? pool[level] : `${pool[level % pool.length]} ${Math.floor(level / pool.length) + 1}`;
+  }
+  const letter = level ?? int(rng, 0, 4);
+  return `${name.replace(/\b\w/, (c) => c.toUpperCase())} ${String.fromCharCode(65 + letter % 26)}${letter >= 26 ? Math.floor(letter / 26) : ""}`;
+}
+function typed(raw, dataType) {
+  if (dataType === "integer" || dataType === "decimal") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (dataType === "boolean") return /^(true|yes|y|1|ja|já)$/i.test(raw.trim());
+  return raw;
+}
+function hierarchyLevels(table, project) {
+  const dim = project.dimensions.find((d) => d.id === table.sourceId);
+  if (!dim) return [];
+  const out = [];
+  for (const h of dim.hierarchies) {
+    const levels = h.split(/\s*(?:→|->|>|\/|\|)\s*/).map((l) => l.trim().toLowerCase()).filter(Boolean);
+    const cols = levels.map(
+      (level) => table.columns.find(
+        (c) => c.role === "attribute" && c.source.kind === "attribute" && !c.source.attribute.sampleValues?.length && (c.source.attribute.name.trim().toLowerCase() === level || c.name === level.replace(/\s+/g, "_"))
+      )
+    ).filter((c) => !!c);
+    if (cols.length >= 2) out.push(cols);
+  }
+  return out;
+}
+function planHierarchy(cols) {
+  const poolSize = (c) => poolFor(c.source.kind === "attribute" ? c.source.attribute.name : c.name)?.length;
+  const top = cols.length - 1;
+  let size = Math.min(4, poolSize(cols[top]) ?? 4);
+  const fanout = new Array(cols.length).fill(1);
+  for (let li = top - 1; li >= 0; li--) {
+    fanout[li] = Math.max(1, Math.floor((poolSize(cols[li]) ?? size * 3) / size));
+    size *= fanout[li];
+  }
+  return { cols, leaves: size, fanout };
+}
+function hierarchyPositions(plans, rng) {
+  const out = /* @__PURE__ */ new Map();
+  for (const plan of plans) {
+    let index = int(rng, 0, plan.leaves - 1);
+    plan.cols.forEach((c, li) => {
+      out.set(c.name, index);
+      index = Math.floor(index / plan.fanout[li]);
+    });
+  }
+  return out;
+}
+function defaultRows(table) {
+  if (table.kind === "fact") {
+    return table.factTableType === "accumulating-snapshot" ? 500 : DEFAULT_FACT_ROWS;
+  }
+  const subject = `${table.label}`;
+  if (PEOPLE.test(subject)) return 200;
+  if (PRODUCTS.test(subject)) return 120;
+  if (SITES.test(subject) || COMPANIES.test(subject)) return 30;
+  if (table.columns.length <= 3) return 8;
+  return 25;
+}
+function junkValues(col, table, rng) {
+  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
+  if (attribute?.sampleValues?.length) return [...new Set(attribute.sampleValues.map((v) => typed(v, col.dataType)))];
+  if (col.dataType === "boolean") return [false, true];
+  if (col.dataType === "integer" || col.dataType === "decimal") return [1, 2, 3, 4, 5];
+  if (col.dataType === "date") return ["2025-01-01", "2025-07-01"];
+  const pool = poolFor(attribute?.name ?? col.name);
+  if (pool) return pool.slice(0, 6);
+  return [...new Set(Array.from({ length: 5 }, (_, i) => attributeValue(col, table, i, rng, i)))];
+}
+function junkTable(table, settings) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const attrs = table.columns.filter((c) => c.role === "attribute");
+  const domains = attrs.map((c) => junkValues(c, table, rng));
+  const combinations = domains.reduce((n2, d) => n2 * Math.max(1, d.length), 1);
+  const n = Math.min(rowCount(table, settings), combinations);
+  const picked = /* @__PURE__ */ new Set();
+  if (combinations <= 5e3) {
+    const all = Array.from({ length: combinations }, (_, i) => i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    all.slice(0, n).forEach((i) => picked.add(i));
+  } else {
+    while (picked.size < n) picked.add(Math.floor(rng() * combinations));
+  }
+  const rows = [];
+  let key = 0;
+  for (let combo of picked) {
+    key += 1;
+    const values = /* @__PURE__ */ new Map();
+    attrs.forEach((c, i) => {
+      const d = domains[i];
+      values.set(c.name, d.length ? d[combo % d.length] : null);
+      combo = Math.floor(combo / Math.max(1, d.length));
+    });
+    rows.push(table.columns.map((c) => c.role === "surrogate-key" ? key : values.get(c.name) ?? null));
+  }
+  return {
+    table: { name: table.name, columns: table.columns.map((c) => c.name), rows },
+    members: rows.map((r) => [{ key: r[0], from: "0000-01-01", to: FAR_FUTURE }])
+  };
+}
+function rowCount(table, settings) {
+  return settings.rows[table.sourceId] ?? defaultRows(table);
+}
+function calendarTable(table, dates) {
+  const rows = dates.map(
+    (iso) => table.columns.map((c) => {
+      if (c.role === "surrogate-key") return dateKey(iso);
+      if (c.source.kind === "generated" && c.source.purpose === "full-date") return iso;
+      if (c.source.kind === "date-part") return datePart(iso, c.source.part, c.name);
+      if (c.source.kind === "attribute") {
+        const a = c.source.attribute;
+        if (a.sampleValues?.length) return typed(a.sampleValues[dateKey(iso) % a.sampleValues.length], c.dataType);
+        return c.dataType === "date" ? iso : c.dataType === "boolean" ? false : `${a.name} ${iso.slice(0, 7)}`;
+      }
+      return null;
+    })
+  );
+  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members: dates.map((iso) => [{ key: dateKey(iso), from: iso, to: iso }]) };
+}
+function memberTable(table, project, settings, dates) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const n = rowCount(table, settings);
+  const hierarchies = hierarchyLevels(table, project);
+  const historyCols = new Set(
+    table.columns.filter((c) => c.source.kind === "attribute" && c.source.attribute.scdType === 2).map((c) => c.name)
+  );
+  const rows = [];
+  const members = [];
+  let key = 0;
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const plans = hierarchies.map(planHierarchy);
+  const movesWithHistory = new Set(hierarchies.filter((cols) => cols.some((c) => historyCols.has(c.name))).flat().map((c) => c.name));
+  for (let i = 0; i < n; i++) {
+    const levelOf = hierarchyPositions(plans, rng);
+    const base = table.columns.map((c) => {
+      if (c.role === "business-key") {
+        if (c.source.kind === "attribute" && c.source.attribute.sampleValues?.length && n <= c.source.attribute.sampleValues.length) {
+          return c.source.attribute.sampleValues[i];
+        }
+        return `${codePrefix(c.source.kind === "attribute" ? c.source.attribute.name : table.label)}-${pad(i + 1)}`;
+      }
+      if (c.role === "attribute") {
+        if (c.source.kind === "generated") return entityName(table.label, i, rng);
+        return attributeValue(c, table, i, rng, levelOf.get(c.name));
+      }
+      return null;
+    });
+    const versions = [];
+    const changes = table.scd2 && historyCols.size > 0 && dates.length > 2 && rng() < 0.25;
+    const changeAt = changes ? dates[int(rng, 1, dates.length - 1)] : null;
+    const spans = changeAt ? [
+      [first, toIso(toTime(changeAt) - DAY), false],
+      [changeAt, FAR_FUTURE, true]
+    ] : [[first, FAR_FUTURE, true]];
+    spans.forEach(([from, to, current], vi) => {
+      key += 1;
+      const moved = vi > 0 ? hierarchyPositions(plans, rng) : null;
+      const row = table.columns.map((c, ci) => {
+        if (moved && movesWithHistory.has(c.name)) return attributeValue(c, table, i, rng, moved.get(c.name));
+        if (c.role === "surrogate-key") return key;
+        if (c.source.kind === "generated" && c.source.purpose === "effective-from") return from;
+        if (c.source.kind === "generated" && c.source.purpose === "effective-to") return to;
+        if (c.source.kind === "generated" && c.source.purpose === "current") return current;
+        if (c.source.kind === "generated" && c.source.purpose === "prior") return null;
+        if (vi > 0 && historyCols.has(c.name)) {
+          let v = attributeValue(c, table, i, rng);
+          for (let tries = 0; tries < 4 && v === base[ci]; tries++) v = attributeValue(c, table, i, rng);
+          return v;
+        }
+        return base[ci] ?? null;
+      });
+      rows.push(row);
+      versions.push({ key, from, to: to === FAR_FUTURE ? last : to });
+    });
+    members.push(versions);
+  }
+  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members };
+}
+function versionAt(versions, iso) {
+  return (versions.find((v) => v.from <= iso && iso <= v.to) ?? versions[versions.length - 1]).key;
+}
+function measureValue(col, rng, quantity, price) {
+  const m = col.source.kind === "measure" ? col.source.measure : void 0;
+  const name = `${m?.name ?? col.name} ${m?.unit ?? ""}`.toLowerCase();
+  const integer = col.dataType === "integer";
+  if (m?.sampleRange) {
+    const [lo, hi] = m.sampleRange;
+    return integer ? int(rng, Math.ceil(lo), Math.floor(hi)) : round(lo + rng() * (hi - lo), 2);
+  }
+  const semi = col.additivity === "semi-additive";
+  if (/%|percent|pct|ratio|rate|share/.test(name)) return round(rng(), 4);
+  if (/lag|duration|time to|hours|minutes|seconds/.test(name)) return integer ? int(rng, 1, 120) : round(0.5 + rng() * 72, 2);
+  if (integer) {
+    if (/quantity|units|qty/.test(name)) return semi ? int(rng, 0, 500) : quantity;
+    if (/days/.test(name)) return int(rng, 0, 30);
+    if (/seats|users|members|months/.test(name)) return semi ? int(rng, 1, 250) : int(rng, -3, 12);
+    if (/count|events|views|clicks|sessions/.test(name)) return int(rng, 0, 50);
+    return int(rng, 1, 20);
+  }
+  if (/change|delta|difference/.test(name)) return round((rng() < 0.3 ? -1 : 1) * (10 + rng() * 300), 2);
+  if (semi || /balance|mrr|premium|value at|on hand/.test(name)) return round(200 + rng() * 2e4, 2);
+  const base = quantity * price;
+  const share = (lo, hi) => round(base * (lo + rng() * (hi - lo)), 2);
+  if (/discount|rebate|reduction|markdown/.test(name)) return rng() < 0.6 ? 0 : share(0.05, 0.25);
+  if (/tax|vat/.test(name)) return share(0.1, 0.24);
+  if (/cost/.test(name)) return share(0.55, 0.75);
+  if (/margin|profit/.test(name)) return share(0.15, 0.4);
+  if (/unit price|price/.test(name)) return round(price, 2);
+  if (/allowed/.test(name)) return share(0.7, 0.95);
+  if (/paid/.test(name)) return share(0.5, 0.85);
+  if (/responsibility|copay|deductible/.test(name)) return share(0.05, 0.2);
+  return round(base, 2);
+}
+function factData(table, model, dims, settings, dates) {
+  const rng = random(hash32(`${settings.seed}:${table.name}`));
+  const n = rowCount(table, settings);
+  const calendar = new Set(model.tables.filter((t) => t.calendar).map((t) => t.name));
+  const monthEnds = dates.filter((iso, i) => i === dates.length - 1 || dates[i + 1].slice(5, 7) !== iso.slice(5, 7));
+  const rows = [];
+  let group = 0;
+  for (let r = 0; r < n; r++) {
+    const snapshot = table.factTableType === "periodic-snapshot";
+    let dayIndex = snapshot ? dates.indexOf(choose(rng, monthEnds)) : int(rng, 0, dates.length - 1);
+    const baseDate = dates[dayIndex];
+    const quantity = 1 + Math.floor(Math.pow(rng(), 2) * 8);
+    const price = 2 + Math.pow(rng(), 2) * 150;
+    if (r === 0 || rng() < 0.4) group += 1;
+    let firstDate = true;
+    const row = table.columns.map((c) => {
+      if (c.role === "foreign-key" && c.references) {
+        if (calendar.has(c.references.table)) {
+          if (!firstDate) dayIndex = Math.min(dates.length - 1, dayIndex + int(rng, 0, 6));
+          firstDate = false;
+          return dateKey(dates[dayIndex]);
+        }
+        const dim = dims.get(c.references.table);
+        if (!dim || dim.members.length === 0) return null;
+        return versionAt(dim.members[skewed(rng, dim.members.length)], baseDate);
+      }
+      if (c.role === "degenerate") {
+        const id2 = table.factTableType === "transaction" ? group : r + 1;
+        return `${codePrefix(c.name)}-${pad(id2, 6)}`;
+      }
+      if (c.role === "measure") return measureValue(c, rng, quantity, price);
+      return null;
+    });
+    rows.push(row);
+  }
+  return { name: table.name, columns: table.columns.map((c) => c.name), rows };
+}
+function generateSampleData(project, model = physicalModel(project), settings = physicalSettings(project)) {
+  const dates = sampleDates(settings);
+  const dims = /* @__PURE__ */ new Map();
+  for (const t of model.tables.filter((x) => x.kind === "dimension")) {
+    dims.set(t.name, t.calendar ? calendarTable(t, dates) : t.junk ? junkTable(t, settings) : memberTable(t, project, settings, dates));
+  }
+  const tables = {};
+  for (const [name, d] of dims) tables[name] = d.table;
+  for (const t of model.tables.filter((x) => x.kind === "fact")) tables[t.name] = factData(t, model, dims, settings, dates);
+  return { settings, tables };
+}
+function sqlLiteral(value, dialect) {
+  if (value === null) return "NULL";
+  if (typeof value === "boolean") return dialect === "sqlserver" ? value ? "1" : "0" : value ? "TRUE" : "FALSE";
+  if (typeof value === "number") return String(value);
+  const text = value.replace(/'/g, "''");
+  return dialect === "sqlserver" ? `N'${text}'` : `'${text}'`;
+}
+function seedScript(project, dataset, dialect, model = physicalModel(project)) {
+  const out = [
+    `-- ${displayName(project.meta, "Untitled project")}: sample data (made up, not real) for ${dialect === "postgres" ? "PostgreSQL" : dialect === "sqlserver" ? "SQL Server" : "Snowflake"}`,
+    `-- Seed ${dataset.settings.seed}, dates ${dataset.settings.dateFrom} to ${dataset.settings.dateTo}. Run after the CREATE TABLE script.`
+  ];
+  const batch = 500;
+  for (const t of [...model.tables.filter((x) => x.kind === "dimension"), ...model.tables.filter((x) => x.kind === "fact")]) {
+    const data = dataset.tables[t.name];
+    if (!data || data.rows.length === 0) continue;
+    const identity = t.kind === "dimension" && !t.calendar;
+    out.push("", `-- ${t.name}: ${data.rows.length} rows`);
+    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} ON;`);
+    for (let i = 0; i < data.rows.length; i += batch) {
+      const rows = data.rows.slice(i, i + batch).map((row) => `  (${row.map((v) => sqlLiteral(v, dialect)).join(", ")})`);
+      out.push(`INSERT INTO ${t.name} (${data.columns.join(", ")}) VALUES
+${rows.join(",\n")};`);
+    }
+    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} OFF;`);
+    if (identity && dialect === "postgres" && t.keyColumn) {
+      out.push(`SELECT setval(pg_get_serial_sequence('${t.name}', '${t.keyColumn}'), (SELECT max(${t.keyColumn}) FROM ${t.name}));`);
+    }
+  }
+  return out.join("\n") + "\n";
+}
+function tableToCsv(table) {
+  const cell = (v) => v === null ? "" : typeof v === "string" ? csvCell(v) : String(v);
+  return "\uFEFF" + [table.columns.join(","), ...table.rows.map((r) => r.map(cell).join(","))].join("\r\n") + "\r\n";
+}
+
+// src/core/explore.ts
+var AGGREGATES2 = [
+  { value: "sum", label: "Sum" },
+  { value: "avg", label: "Average" },
+  { value: "min", label: "Minimum" },
+  { value: "max", label: "Maximum" },
+  { value: "count", label: "Count rows" }
+];
+var groupKey = (g) => g.attribute ? `${g.column}.${g.attribute}` : g.column;
+var dimensionOf = (model, fk) => model.tables.find((t) => t.name === fk.references?.table);
+function groupOptions(model, fact) {
+  const out = [];
+  for (const c of fact.columns) {
+    if (c.role === "degenerate") {
+      out.push({ key: c.name, label: c.name, section: c.note.replace(/^Degenerate dimension: /, ""), by: { column: c.name } });
+    }
+    if (c.role !== "foreign-key") continue;
+    const dim = dimensionOf(model, c);
+    if (!dim) continue;
+    const section = c.source.kind === "usage" && c.source.role ? c.source.role : dim.label;
+    for (const a of dim.columns) {
+      if (a.role === "surrogate-key" || a.role === "history" && a.name !== "is_current_row") continue;
+      out.push({ key: groupKey({ column: c.name, attribute: a.name }), label: a.name, section, by: { column: c.name, attribute: a.name } });
+    }
+  }
+  return out;
+}
+var PREFERRED_DATE = ["year-month", "month-name", "quarter", "year", "fiscal-period", "day-of-week"];
+var LOW_CARDINALITY = /category|segment|region|type|brand|channel|class|group|tier|department|format|status|country|specialty|plan|edition|industry|band/;
+function preferredAttribute(dim) {
+  const attrs = dim.columns.filter((c) => c.role === "attribute" || c.role === "business-key");
+  if (dim.calendar) {
+    for (const part of PREFERRED_DATE) {
+      const hit = attrs.find((c) => c.source.kind === "date-part" && c.source.part === part);
+      if (hit) return hit.name;
+    }
+  }
+  return attrs.find((c) => c.role === "attribute" && c.dataType === "text" && LOW_CARDINALITY.test(c.name))?.name ?? attrs.find((c) => c.role === "attribute" && c.dataType === "text")?.name ?? attrs[0]?.name;
+}
+function defaultAggregate(additivity) {
+  return additivity === void 0 ? "count" : additivity === "additive" ? "sum" : "avg";
+}
+var HEADLINE = [/net_.*amount|sales_amount|revenue|mrr|invoice_amount|billed|paid_amount/, /amount|value/];
+function defaultQuery(model, fact) {
+  const measures = fact.columns.filter((c) => c.role === "measure");
+  const additive = measures.filter((m) => m.additivity === "additive");
+  const measure = HEADLINE.map((re) => additive.find((m) => re.test(m.name))).find(Boolean) ?? additive[0] ?? measures[0];
+  const fks = fact.columns.filter((c) => c.role === "foreign-key");
+  const nonDate = fks.find((c) => !dimensionOf(model, c)?.calendar) ?? fks[0];
+  const groupBy = [];
+  const dim = nonDate && dimensionOf(model, nonDate);
+  const attribute = dim && preferredAttribute(dim);
+  if (nonDate && attribute) groupBy.push({ column: nonDate.name, attribute });
+  return { fact: fact.name, measure: measure?.name ?? null, aggregate: defaultAggregate(measure?.additivity), groupBy, limit: 20 };
+}
+var RESERVED_ALIASES = /* @__PURE__ */ new Set(["as", "at", "by", "do", "f", "if", "in", "is", "of", "on", "or", "to"]);
+function aliasFor(column, used) {
+  const base = column.replace(/_key$/, "").split("_").filter(Boolean).map((w) => w[0]).join("") || "d";
+  let alias = base;
+  for (let n = 2; used.has(alias) || RESERVED_ALIASES.has(alias); n++) alias = `${base}${n}`;
+  used.add(alias);
+  return alias;
+}
+function querySql(model, query, dialect) {
+  const fact = model.tables.find((t) => t.name === query.fact);
+  if (!fact) return "";
+  const used = /* @__PURE__ */ new Set(["f"]);
+  const joins = /* @__PURE__ */ new Map();
+  const ref = (g) => {
+    if (!g.attribute) return `f.${g.column}`;
+    let j = joins.get(g.column);
+    if (!j) {
+      const fk = fact.columns.find((c) => c.name === g.column);
+      j = { alias: aliasFor(g.column, used), dim: dimensionOf(model, fk), fk };
+      joins.set(g.column, j);
+    }
+    return `${j.alias}.${g.attribute}`;
+  };
+  const groups = query.groupBy.map(ref);
+  const filter = query.filter ? `${ref(query.filter.by)} = ${sqlLiteral(query.filter.value, dialect)}` : null;
+  const measure = fact.columns.find((c) => c.name === query.measure);
+  const valueAlias = measure && query.aggregate !== "count" ? `${query.aggregate}_${measure.name}` : "row_count";
+  let value = "COUNT(*)";
+  if (measure && query.aggregate !== "count") {
+    const arg = dialect === "sqlserver" && query.aggregate === "avg" && measure.dataType === "integer" ? `CAST(f.${measure.name} AS decimal(18,4))` : `f.${measure.name}`;
+    value = `${query.aggregate.toUpperCase()}(${arg})`;
+  }
+  const limit = query.limit ?? 20;
+  const select = [...groups, `${value} AS ${valueAlias}`];
+  const lines = [`SELECT${dialect === "sqlserver" ? ` TOP (${limit})` : ""}`, `  ${select.join(",\n  ")}`, `FROM ${fact.name} AS f`];
+  for (const j of joins.values()) lines.push(`JOIN ${j.dim.name} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
+  if (filter) lines.push(`WHERE ${filter}`);
+  if (groups.length) lines.push(`GROUP BY ${groups.join(", ")}`);
+  lines.push(`ORDER BY ${valueAlias} DESC`);
+  if (dialect !== "sqlserver") lines.push(`LIMIT ${limit}`);
+  return lines.join("\n") + ";";
+}
+
+// src/core/traceability.ts
+function fromRequirementQuery(model, query) {
+  const fact = model.tables.find((t) => t.kind === "fact" && t.sourceId === query.processId);
+  if (!fact?.columns.some((c) => c.role === "foreign-key" || c.role === "degenerate")) return null;
+  const options = new Set(groupOptions(model, fact).map((o) => o.key));
+  const by = (q) => {
+    let g;
+    if (!q.attributeId && !q.column) {
+      const c = fact.columns.find((x) => x.source.kind === "degenerate" && x.source.dimensionId === q.dimensionId);
+      g = c && { column: c.name };
+    } else {
+      const fk = fact.columns.find(
+        (x) => x.source.kind === "usage" && x.source.dimensionId === q.dimensionId && (x.source.role ?? "").trim() === (q.role ?? "").trim()
+      );
+      const dim = fk && model.tables.find((t) => t.name === fk.references?.table);
+      const a = dim?.columns.find((x) => q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column);
+      g = fk && a && { column: fk.name, attribute: a.name };
+    }
+    return g && options.has(groupKey(g)) ? g : null;
+  };
+  let measure = null;
+  if (query.aggregate !== "count") {
+    const m = fact.columns.find((c) => c.source.kind === "measure" && c.source.measure.id === query.measureId);
+    if (!m) return null;
+    measure = m.name;
+  }
+  const groupBy = query.groupBy.map(by);
+  if (groupBy.some((g) => !g)) return null;
+  const filterBy = query.filter ? by(query.filter.column) : null;
+  if (query.filter && !filterBy) return null;
+  return {
+    fact: fact.name,
+    measure,
+    aggregate: query.aggregate,
+    groupBy,
+    filter: filterBy ? { by: filterBy, value: query.filter.value } : null,
+    limit: 20
+  };
+}
+function describeRequirementQuery(project, query) {
+  const process2 = processById(project, query.processId);
+  const measure = process2?.facts.find((f) => f.id === query.measureId);
+  const what = query.aggregate === "count" ? "number of rows" : `${AGGREGATES2.find((a) => a.value === query.aggregate).label.toLowerCase()} of ${measure ? displayName(measure) : `a missing fact (${query.measureId})`}`;
+  const column = (q) => {
+    const dim = dimensionById(project, q.dimensionId);
+    const subject = q.role?.trim() || (dim ? displayName(dim) : q.dimensionId);
+    if (!q.attributeId && !q.column) return subject;
+    const attr = dim?.attributes.find((a) => a.id === q.attributeId);
+    return `${subject} › ${attr ? displayName(attr) : (q.column ?? q.attributeId ?? "").replace(/_/g, " ")}`;
+  };
+  const by = query.groupBy.length ? ` by ${query.groupBy.map(column).join(" and ")}` : "";
+  const where = query.filter ? `, where ${column(query.filter.column)} is “${query.filter.value}”` : "";
+  return `${process2 ? displayName(process2) : "Missing process"}: ${what}${by}${where}`;
+}
+function requirementAnswers(project, model = physicalModel(project)) {
+  return project.requirements.map((requirement, i) => {
+    const saved = requirement.query;
+    const query = saved ? fromRequirementQuery(model, saved) : null;
+    return {
+      requirement,
+      label: `R${i + 1}`,
+      status: !saved ? "unanswered" : query ? "answered" : "outdated",
+      query,
+      description: saved ? describeRequirementQuery(project, saved) : null
+    };
+  });
 }
 
 // src/core/validate.ts
@@ -899,6 +1653,30 @@ function validateProject(project) {
         phase: "processes",
         target: { kind: "requirement", id: r.id }
       });
+    }
+  }
+  if (requirements.some((r) => r.query)) {
+    for (const a of requirementAnswers(project, physicalModel(project))) {
+      const r = a.requirement;
+      if (a.status === "outdated") {
+        add({
+          code: "KD109",
+          severity: "warning",
+          message: `The query that answers "${short(r.statement)}" no longer matches the design.`,
+          hint: "A process, measure, dimension role or attribute it uses was changed or removed. Build the question again in the Prototype explorer and save it.",
+          phase: "prototype",
+          target: { kind: "requirement", id: r.id }
+        });
+      } else if (a.status === "unanswered" && r.priority === "must" && r.statement.trim()) {
+        add({
+          code: "KD206",
+          severity: "info",
+          message: `Must-have requirement "${short(r.statement)}" isn't answered by a prototype query yet.`,
+          hint: "Build the question in the Prototype explorer and save it as the answer. If you can't, the design is missing a dimension, an attribute or a fact.",
+          phase: "prototype",
+          target: { kind: "requirement", id: r.id }
+        });
+      }
     }
   }
   const dupNames = (items, kind, phase, label) => {
@@ -1158,68 +1936,6 @@ var PALETTES = tokens_default.color;
 var FONT_SANS = tokens_default.font.sans;
 var FONT_MONO = tokens_default.font.mono;
 
-// src/core/text.ts
-var XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
-function escapeXml(s) {
-  return s.replace(XML_INVALID, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-function mdCell(s) {
-  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>").trim();
-}
-function mdInline(s) {
-  return s.replace(/\\/g, "\\\\").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/([`*_[\]|])/g, "\\$1").replace(/\s*\r?\n\s*/g, " ").trim().replace(/^([#+-])/, "\\$1").replace(/^(\d+)([.)])/, "$1\\$2");
-}
-function mdCode(s) {
-  const text = s.replace(/\s*\r?\n\s*/g, " ").trim();
-  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
-  const fence = "`".repeat(longest + 1);
-  const pad2 = text.startsWith("`") || text.endsWith("`") ? " " : "";
-  return `${fence}${pad2}${text}${pad2}${fence}`;
-}
-function csvCell(s) {
-  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-function slugify(s, fallback = "item") {
-  const slug = s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60).replace(/^-+|-+$/g, "");
-  return slug || fallback;
-}
-function wrapText(text, maxWidth, maxLines) {
-  const maxChars = Math.max(2, Math.floor(maxWidth));
-  const words = text.trim().split(/\s+/).filter(Boolean).map((w) => Array.from(w));
-  const lines = [];
-  let current = [];
-  const push = (line) => lines.push(line.join(""));
-  for (let word of words) {
-    while (word.length > maxChars) {
-      if (current.length) {
-        push(current);
-        current = [];
-      }
-      push([...word.slice(0, maxChars - 1), "-"]);
-      word = word.slice(maxChars - 1);
-    }
-    if (!current.length) current = word;
-    else if (current.length + 1 + word.length <= maxChars) current = [...current, " ", ...word];
-    else {
-      push(current);
-      current = word;
-    }
-  }
-  if (current.length) push(current);
-  if (lines.length > maxLines) {
-    const kept = lines.slice(0, maxLines);
-    const last = Array.from(kept[maxLines - 1]);
-    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1).join("") : last.join("")) + "…";
-    return kept;
-  }
-  return lines;
-}
-function truncate(s, max) {
-  const chars = Array.from(s);
-  return chars.length > max ? chars.slice(0, max - 1).join("") + "…" : s;
-}
-
 // src/core/busMatrix.ts
 function deriveBusMatrix(project, options = {}) {
   const { columnOrder = "usage", rowOrder = "project", includeUnused = true } = options;
@@ -1382,8 +2098,8 @@ function layoutBubble(project, process2, options = {}) {
       roles: [...new Set(roles)],
       kind: dim?.kind ?? "standard",
       conformed: isConformedUsage(dim?.kind, usageCount(dimensionId)),
-      x: round(cx + dist * Math.cos(angle)),
-      y: round(cy + dist * Math.sin(angle)),
+      x: round2(cx + dist * Math.cos(angle)),
+      y: round2(cy + dist * Math.sin(angle)),
       r
     };
   });
@@ -1401,8 +2117,8 @@ function layoutBubble(project, process2, options = {}) {
   return {
     width: Math.ceil(width),
     height: Math.ceil(height),
-    cx: round(cx),
-    cy: round(cy),
+    cx: round2(cx),
+    cy: round2(cy),
     centerR: CENTER_R,
     centerLines: wrapText(displayName(process2), 13, 3),
     nodes,
@@ -1412,7 +2128,7 @@ function layoutBubble(project, process2, options = {}) {
     legend
   };
 }
-var round = (v) => Math.round(v * 10) / 10;
+var round2 = (v) => Math.round(v * 10) / 10;
 var ADDITIVITY_SHORT = { additive: "A", "semi-additive": "SA", "non-additive": "NA" };
 function bubbleToSvg(project, process2, options = {}) {
   const theme = options.theme ?? "light";
@@ -1445,10 +2161,10 @@ function bubbleToSvg(project, process2, options = {}) {
     const dx = nd.x - L.cx;
     const dy = nd.y - L.cy;
     const len = Math.hypot(dx, dy) || 1;
-    const x1 = round(L.cx + dx / len * L.centerR);
-    const y1 = round(L.cy + dy / len * L.centerR);
-    const x2 = round(nd.x - dx / len * nd.r);
-    const y2 = round(nd.y - dy / len * nd.r);
+    const x1 = round2(L.cx + dx / len * L.centerR);
+    const y1 = round2(L.cy + dy / len * L.centerR);
+    const x2 = round2(nd.x - dx / len * nd.r);
+    const y2 = round2(nd.y - dy / len * nd.r);
     out.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`);
   }
   out.push("</g>");
@@ -1463,11 +2179,11 @@ function bubbleToSvg(project, process2, options = {}) {
       ) : `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}">`,
       `<title>${t(nd.label)}${nd.conformed ? " — conformed" : ""}${nd.roles.length ? ` — roles: ${t(nd.roles.join(", "))}` : ""}</title>`,
       `<circle cx="${nd.x}" cy="${nd.y}" r="${nd.r}" fill="${nd.conformed ? c.conformedSoft : c.dimSoft}" stroke="${stroke}" stroke-width="${nd.conformed ? 3 : 2}"${nd.kind === "degenerate" ? ' stroke-dasharray="5 4"' : ""}/>`,
-      `<text text-anchor="middle" font-size="12.5" font-weight="600" fill="${c.ink}">` + nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round(startY + i * lineH)}">${t(ln)}</tspan>`).join(" ") + "</text>"
+      `<text text-anchor="middle" font-size="12.5" font-weight="600" fill="${c.ink}">` + nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round2(startY + i * lineH)}">${t(ln)}</tspan>`).join(" ") + "</text>"
     );
     if (nd.roles.length) {
       out.push(
-        `<text x="${nd.x}" y="${round(nd.y + nd.r + 15)}" text-anchor="middle" font-size="11" font-style="italic" fill="${c.muted}">${t(truncate(nd.roles.join(" · "), 30))}</text>`
+        `<text x="${nd.x}" y="${round2(nd.y + nd.r + 15)}" text-anchor="middle" font-size="11" font-style="italic" fill="${c.muted}">${t(truncate(nd.roles.join(" · "), 30))}</text>`
       );
     }
     out.push("</g>");
@@ -1478,7 +2194,7 @@ function bubbleToSvg(project, process2, options = {}) {
     `<g class="kd-process">`,
     `<circle cx="${L.cx}" cy="${L.cy}" r="${L.centerR}" fill="${centerFill}"/>`,
     `<circle cx="${L.cx}" cy="${L.cy}" r="${L.centerR - 6}" fill="none" stroke="${centerText}" stroke-opacity="0.35" stroke-width="1.5"/>`,
-    `<text text-anchor="middle" font-size="15.5" font-weight="700" fill="${centerText}">` + L.centerLines.map((ln, i) => `<tspan x="${L.cx}" y="${round(cStart + i * cLineH)}">${t(ln)}</tspan>`).join("") + "</text>",
+    `<text text-anchor="middle" font-size="15.5" font-weight="700" fill="${centerText}">` + L.centerLines.map((ln, i) => `<tspan x="${L.cx}" y="${round2(cStart + i * cLineH)}">${t(ln)}</tspan>`).join("") + "</text>",
     "</g>"
   );
   if (L.panel) {
@@ -1575,12 +2291,28 @@ function requirementsToMarkdown(project, now = (/* @__PURE__ */ new Date()).toIS
   h("## 3. Business requirements");
   if (requirements.length === 0) out.push("_No requirements recorded._");
   else {
-    out.push("| # | Requirement | Priority | KPIs | Raised by | Business processes |", "|---|---|---|---|---|---|");
+    const answers = requirements.some((r) => r.query) ? requirementAnswers(project) : null;
+    const answeredBy = (i) => {
+      const a = answers?.[i];
+      if (!a?.description) return "—";
+      return a.status === "outdated" ? `${mdCell(a.description)} _(no longer matches the design)_` : mdCell(a.description);
+    };
+    out.push(
+      `| # | Requirement | Priority | KPIs | Raised by | Business processes |${answers ? " Answered by |" : ""}`,
+      `|---|---|---|---|---|---|${answers ? "---|" : ""}`
+    );
     requirements.forEach((r, i) => {
       out.push(
-        `| R${i + 1} | ${dash(r.statement)} | ${optionLabel(PRIORITIES, r.priority)} | ${dash(r.kpis.join(", "))} | ${dash(r.stakeholderIds.map(stakeholderName).join(", "))} | ${dash(r.processIds.map(processName).join(", "))} |`
+        `| R${i + 1} | ${dash(r.statement)} | ${optionLabel(PRIORITIES, r.priority)} | ${dash(r.kpis.join(", "))} | ${dash(r.stakeholderIds.map(stakeholderName).join(", "))} | ${dash(r.processIds.map(processName).join(", "))} |${answers ? ` ${answeredBy(i)} |` : ""}`
       );
     });
+    if (answers) {
+      const must = answers.filter((a) => a.requirement.priority === "must");
+      out.push(
+        "",
+        `_Answered by_ is the prototype query that shows the design answers the requirement. ${must.filter((a) => a.status === "answered").length} of ${must.length} must-have requirements are answered; the SQL is in the prototype's \`queries.sql\`.`
+      );
+    }
   }
   h("## 4. Business processes");
   if (processes.length === 0) out.push("_No business processes recorded._");
@@ -1737,12 +2469,12 @@ var retail_kimball_default = {
     { id: "sh_elena", name: "Elena Petrova", role: "POS & ERP platform lead", department: "IT", type: "it", interviewStatus: "done", notes: "POS line-level data available since 2022; ERP receipts are reliable; e-commerce milestones live in the order service." }
   ],
   requirements: [
-    { id: "rq_category_growth", statement: "Which categories and brands are growing, by store, region and week?", kpis: ["Net sales amount", "Units sold", "Gross margin %"], priority: "must", stakeholderIds: ["sh_dana", "sh_jonas"], processIds: ["bp_retail_sales"], notes: "" },
-    { id: "rq_promo_lift", statement: "Did a promotion increase sales, and did it cannibalise other products?", kpis: ["Promotion lift", "Incremental margin"], priority: "must", stakeholderIds: ["sh_sam"], processIds: ["bp_retail_sales"], notes: "Needs a baseline of the same products in non-promoted weeks." },
+    { id: "rq_category_growth", statement: "Which categories and brands are growing, by store, region and week?", kpis: ["Net sales amount", "Units sold", "Gross margin %"], priority: "must", stakeholderIds: ["sh_dana", "sh_jonas"], processIds: ["bp_retail_sales"], notes: "", query: { processId: "bp_retail_sales", measureId: "ms_net_sales", aggregate: "sum", groupBy: [{ dimensionId: "dm_product", attributeId: "at_prod_category" }, { dimensionId: "dm_date", attributeId: "at_date_week" }] } },
+    { id: "rq_promo_lift", statement: "Did a promotion increase sales, and did it cannibalise other products?", kpis: ["Promotion lift", "Incremental margin"], priority: "must", stakeholderIds: ["sh_sam"], processIds: ["bp_retail_sales"], notes: "Needs a baseline of the same products in non-promoted weeks.", query: { processId: "bp_retail_sales", measureId: "ms_net_sales", aggregate: "sum", groupBy: [{ dimensionId: "dm_promotion", attributeId: "at_promo_price_type" }, { dimensionId: "dm_product", attributeId: "at_prod_category" }] } },
     { id: "rq_out_of_stock", statement: "Where and when are we out of stock?", kpis: ["Out-of-stock rate", "Days of supply"], priority: "must", stakeholderIds: ["sh_priya"], processIds: ["bp_store_inventory"], notes: "" },
     { id: "rq_vendor_performance", statement: "Are vendors delivering on time and complete?", kpis: ["On-time delivery %", "Fill rate"], priority: "should", stakeholderIds: ["sh_dana", "sh_priya"], processIds: ["bp_po_receipts"], notes: "" },
     { id: "rq_basket", statement: "What do customers buy together?", kpis: ["Basket size", "Items per basket"], priority: "could", stakeholderIds: ["sh_jonas"], processIds: ["bp_retail_sales"], notes: "" },
-    { id: "rq_fulfilment", statement: "How long do online orders take from order to delivery, and where do they wait?", kpis: ["Order cycle time", "On-time delivery %"], priority: "should", stakeholderIds: ["sh_priya"], processIds: ["bp_online_fulfilment"], notes: "" }
+    { id: "rq_fulfilment", statement: "How long do online orders take from order to delivery, and where do they wait?", kpis: ["Order cycle time", "On-time delivery %"], priority: "should", stakeholderIds: ["sh_priya"], processIds: ["bp_online_fulfilment"], notes: "", query: { processId: "bp_online_fulfilment", measureId: "ms_order_to_ship", aggregate: "avg", groupBy: [{ dimensionId: "dm_store", role: "Fulfilling store", attributeId: "at_store_region" }] } }
   ],
   processes: [
     {
@@ -2000,10 +2732,10 @@ var saas_kimball_default = {
     { id: "sh_lena", name: "Lena Fischer", role: "Head of Support", department: "Support", type: "business", interviewStatus: "skipped", notes: "Delegated to Marco; ticketing export documented by Kai." }
   ],
   requirements: [
-    { id: "rq_nrr", statement: "What is our net revenue retention by signup cohort and plan?", kpis: ["MRR", "Net revenue retention", "Gross revenue retention"], priority: "must", stakeholderIds: ["sh_ruth"], processIds: ["bp_mrr_snapshot", "bp_subscription_changes"], notes: "" },
+    { id: "rq_nrr", statement: "What is our net revenue retention by signup cohort and plan?", kpis: ["MRR", "Net revenue retention", "Gross revenue retention"], priority: "must", stakeholderIds: ["sh_ruth"], processIds: ["bp_mrr_snapshot", "bp_subscription_changes"], notes: "", query: { processId: "bp_mrr_snapshot", measureId: "ms_mrr", aggregate: "sum", groupBy: [{ dimensionId: "dm_account", attributeId: "at_acc_cohort" }, { dimensionId: "dm_date", role: "Month end", attributeId: "at_d_month" }] } },
     { id: "rq_churn_drivers", statement: "Which signals predict that an account will churn or downgrade?", kpis: ["Churned MRR", "Logo churn rate"], priority: "must", stakeholderIds: ["sh_marco"], processIds: ["bp_subscription_changes", "bp_product_usage", "bp_support_tickets"], notes: "" },
     { id: "rq_expansion", statement: "Which features do expanding accounts adopt first?", kpis: ["Expansion MRR", "Feature adoption rate"], priority: "should", stakeholderIds: ["sh_ines", "sh_marco"], processIds: ["bp_product_usage", "bp_subscription_changes"], notes: "" },
-    { id: "rq_collections", statement: "Are customers paying on time, and how much is overdue?", kpis: ["Days sales outstanding", "Overdue amount"], priority: "should", stakeholderIds: ["sh_ruth"], processIds: ["bp_invoicing"], notes: "" },
+    { id: "rq_collections", statement: "Are customers paying on time, and how much is overdue?", kpis: ["Days sales outstanding", "Overdue amount"], priority: "should", stakeholderIds: ["sh_ruth"], processIds: ["bp_invoicing"], notes: "", query: { processId: "bp_invoicing", measureId: "ms_invoice_amount", aggregate: "sum", groupBy: [{ dimensionId: "dm_date", role: "Due date", attributeId: "at_d_month" }] } },
     { id: "rq_support_speed", statement: "How fast do we respond to and resolve support tickets for our largest accounts?", kpis: ["Time to first response", "Time to resolution"], priority: "could", stakeholderIds: ["sh_marco"], processIds: ["bp_support_tickets"], notes: "" }
   ],
   processes: [
@@ -2258,9 +2990,9 @@ var healthcare_kimball_default = {
     { id: "sh_raj", name: "Raj Patel", role: "Claims systems architect", department: "IT", type: "it", interviewStatus: "done", notes: "Claims arrive as 837 files and are adjudicated in the core admin system; PBM sends a daily pharmacy file." }
   ],
   requirements: [
-    { id: "rq_pmpm", statement: "Which providers and conditions drive the highest cost per member per month?", kpis: ["PMPM cost", "Allowed amount"], priority: "must", stakeholderIds: ["sh_tom", "sh_amara"], processIds: ["bp_medical_claims", "bp_eligibility"], notes: "" },
-    { id: "rq_auth_tat", statement: "How quickly are prior authorisation requests decided, and how many are denied?", kpis: ["Days to decision", "Denial rate"], priority: "must", stakeholderIds: ["sh_mei"], processIds: ["bp_prior_auth"], notes: "Regulatory target: urgent within 72 hours." },
-    { id: "rq_rx_trend", statement: "What are the drug spend trends by therapeutic class?", kpis: ["Pharmacy paid amount", "Cost per script"], priority: "should", stakeholderIds: ["sh_tom"], processIds: ["bp_pharmacy_claims"], notes: "" },
+    { id: "rq_pmpm", statement: "Which providers and conditions drive the highest cost per member per month?", kpis: ["PMPM cost", "Allowed amount"], priority: "must", stakeholderIds: ["sh_tom", "sh_amara"], processIds: ["bp_medical_claims", "bp_eligibility"], notes: "", query: { processId: "bp_medical_claims", measureId: "ms_paid", aggregate: "sum", groupBy: [{ dimensionId: "dm_provider", role: "Rendering provider", attributeId: "at_prov_specialty" }, { dimensionId: "dm_diagnosis", role: "Primary diagnosis", attributeId: "at_dx_condition" }] } },
+    { id: "rq_auth_tat", statement: "How quickly are prior authorisation requests decided, and how many are denied?", kpis: ["Days to decision", "Denial rate"], priority: "must", stakeholderIds: ["sh_mei"], processIds: ["bp_prior_auth"], notes: "Regulatory target: urgent within 72 hours.", query: { processId: "bp_prior_auth", measureId: "ms_days_to_decision", aggregate: "avg", groupBy: [{ dimensionId: "dm_auth_profile", attributeId: "at_ap_decision" }] } },
+    { id: "rq_rx_trend", statement: "What are the drug spend trends by therapeutic class?", kpis: ["Pharmacy paid amount", "Cost per script"], priority: "should", stakeholderIds: ["sh_tom"], processIds: ["bp_pharmacy_claims"], notes: "", query: { processId: "bp_pharmacy_claims", measureId: "ms_ingredient_cost", aggregate: "sum", groupBy: [{ dimensionId: "dm_drug", attributeId: "at_drug_class" }, { dimensionId: "dm_date", role: "Fill date", attributeId: "at_hd_month" }] } },
     { id: "rq_employer_trend", statement: "Is utilisation rising for our largest employer groups?", kpis: ["Visits per 1,000 members", "PMPM trend"], priority: "should", stakeholderIds: ["sh_tom"], processIds: ["bp_medical_claims", "bp_eligibility"], notes: "" }
   ],
   processes: [
@@ -2697,6 +3429,7 @@ var GUIDANCE = {
       "Which database platform will the warehouse run on?"
     ],
     tips: [
+      "Save the question that answers each requirement. A must-have you can't answer points to a missing dimension, attribute or fact.",
       "Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.",
       "Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.",
       "Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.",
@@ -3120,557 +3853,6 @@ function groupAdvice(advice) {
   return out;
 }
 
-// src/core/sampledata.ts
-var DEFAULT_FACT_ROWS = 1e3;
-var MAX_SAMPLE_DAYS = 3660;
-var FAR_FUTURE = "9999-12-31";
-function hash32(text) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-function random(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = a + 1831565813 >>> 0;
-    let t = a;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-var int = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
-var choose = (rng, list2) => list2[Math.floor(rng() * list2.length)];
-var round2 = (n, decimals) => Number(n.toFixed(decimals));
-var skewed = (rng, n) => Math.min(n - 1, Math.floor(Math.pow(rng(), 1.6) * n));
-var DAY = 864e5;
-var toTime = (iso) => Date.parse(`${iso}T00:00:00Z`);
-var toIso = (t) => new Date(t).toISOString().slice(0, 10);
-var dateKey = (iso) => Number(iso.replace(/-/g, ""));
-function sampleDates(settings) {
-  const from = toTime(settings.dateFrom);
-  const to = Math.min(toTime(settings.dateTo), from + (MAX_SAMPLE_DAYS - 1) * DAY);
-  const out = [];
-  for (let t = from; t <= to; t += DAY) out.push(toIso(t));
-  return out.length ? out : [settings.dateFrom];
-}
-var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-function isoWeek(d) {
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-  const yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
-  return Math.ceil(((t.getTime() - yearStart) / DAY + 1) / 7);
-}
-var HOLIDAYS = /* @__PURE__ */ new Set(["01-01", "05-01", "12-24", "12-25", "12-26", "12-31"]);
-function datePart(iso, part, attributeName) {
-  const d = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth();
-  const q = Math.floor(m / 3) + 1;
-  switch (part) {
-    case "date":
-      return iso;
-    case "day-of-week":
-      return WEEKDAYS[d.getUTCDay()];
-    case "day-of-month":
-      return d.getUTCDate();
-    case "week":
-      return isoWeek(d);
-    case "month-number":
-      return m + 1;
-    case "month-name":
-      return MONTHS[m];
-    case "quarter":
-      return `Q${q}`;
-    case "year":
-      return y;
-    case "year-month":
-      return iso.slice(0, 7);
-    case "weekend":
-      return d.getUTCDay() === 0 || d.getUTCDay() === 6;
-    case "holiday":
-      return HOLIDAYS.has(iso.slice(5));
-    case "fiscal-year":
-      return y;
-    case "fiscal-period": {
-      const fy = `FY${String(y).slice(2)}`;
-      if (/week/i.test(attributeName)) return `${fy} W${String(isoWeek(d)).padStart(2, "0")}`;
-      if (/quarter/i.test(attributeName)) return `${fy} Q${q}`;
-      return `${fy} P${String(m + 1).padStart(2, "0")}`;
-    }
-  }
-}
-var FIRST = ["Anna", "Jón", "Sara", "Ólafur", "Maria", "David", "Emma", "Lukas", "Sofia", "Noah", "Elena", "Omar", "Ingrid", "Kenji", "Chloe", "Mateo", "Aisha", "Henrik", "Lea", "Tomas"];
-var LAST = ["Jónsdóttir", "Smith", "García", "Müller", "Hansen", "Rossi", "Novak", "Kim", "Silva", "Dubois", "Larsen", "Nowak", "Okafor", "Sato", "Stefánsson", "Brown", "Costa", "Berg", "Ali", "Moreau"];
-var CITIES = ["Reykjavík", "Akureyri", "Oslo", "Copenhagen", "Stockholm", "Berlin", "Amsterdam", "Dublin", "London", "Lisbon", "Madrid", "Paris", "Vienna", "Warsaw", "Prague", "Helsinki"];
-var COUNTRIES = ["Iceland", "Norway", "Denmark", "Sweden", "Germany", "Netherlands", "Ireland", "United Kingdom", "Portugal", "Spain", "France", "Austria"];
-var POOLS = [
-  [/\bcity|town\b/i, CITIES],
-  [/\bcountry|nation\b/i, COUNTRIES],
-  [/\bregion|district|territory|area\b/i, ["North", "South", "East", "West", "Central"]],
-  [/\bsegment\b/i, ["Consumer", "Small business", "Mid-market", "Enterprise"]],
-  [/\bstatus\b/i, ["Active", "Inactive", "Pending", "Closed"]],
-  // Before "band": an age band is ages, not tiers.
-  [/\bage\b/i, ["18–24", "25–34", "35–44", "45–54", "55–64", "65+"]],
-  [/\btier|level|band\b/i, ["Gold", "Silver", "Bronze"]],
-  [/\bchannel\b/i, ["Store", "Online", "Mobile app", "Partner", "Phone"]],
-  [/\bcolou?r\b/i, ["Black", "White", "Red", "Blue", "Green", "Grey"]],
-  [/\bsize\b/i, ["XS", "S", "M", "L", "XL"]],
-  [/\bpriority|urgency\b/i, ["Low", "Medium", "High", "Urgent"]],
-  [/\bbrand\b/i, ["Northwind", "Contoso", "Fabrikam", "Tailspin", "Litware", "Proseware", "Wingtip", "Adventure Works"]],
-  [/\bcategory|class|group|family\b/i, ["Grocery", "Household", "Personal care", "Beverages", "Snacks", "Frozen", "Bakery", "Dairy"]],
-  [/\bdepartment|division|team|unit\b/i, ["Fresh", "Ambient", "Non-food", "Electronics", "Home"]],
-  [/\bformat\b/i, ["Hypermarket", "Supermarket", "Convenience", "Online"]],
-  [/\bindustry|sector\b/i, ["Retail", "Manufacturing", "Healthcare", "Finance", "Education", "Technology", "Logistics"]],
-  [/\bjob|title|role|position|specialty\b/i, ["Cashier", "Store manager", "Shift lead", "Stock clerk", "Sales associate"]],
-  [/\bcurrency\b/i, ["EUR", "USD", "ISK", "GBP", "DKK"]],
-  [/\bcarrier|courier\b/i, ["Póstur", "DHL", "UPS", "FedEx", "Local courier"]],
-  [/\bmode|method\b/i, ["Standard", "Express", "Collect", "Card", "Cash", "Mobile pay"]],
-  [/\bedition|plan\b/i, ["Free", "Starter", "Team", "Business", "Enterprise"]],
-  [/\bperiod|frequency|billing\b/i, ["Monthly", "Quarterly", "Yearly"]],
-  [/\bdecision|outcome|result\b/i, ["Approved", "Denied", "Pending"]],
-  [/\breason|cause\b/i, ["Price", "Quality", "No longer needed", "Moved", "Other"]],
-  [/\btype|kind\b/i, ["Type A", "Type B", "Type C", "Type D"]],
-  [/\bgender|sex\b/i, ["Female", "Male", "Other", "Unknown"]]
-];
-var PRODUCT_ADJ = ["Classic", "Organic", "Fresh", "Premium", "Everyday", "Mini", "Family", "Light"];
-var PRODUCT_NOUN = ["Coffee", "Yoghurt", "Bread", "Pasta", "Shampoo", "Detergent", "Juice", "Cheese", "Crisps", "Tea", "Apples", "Chocolate"];
-var COMPANY_A = ["Nordic", "Atlantic", "Blue", "Summit", "Arctic", "Green", "Silver", "Prime"];
-var COMPANY_B = ["Foods", "Supply", "Trading", "Logistics", "Partners", "Systems", "Group", "Labs"];
-var SITE_SUFFIX = ["Centre", "Mall", "Harbour", "North", "South", "Airport"];
-var SEASONS = ["Spring", "Summer", "Autumn", "Winter", "Weekend", "Holiday", "Back to school", "Flash"];
-var OFFERS = ["sale", "deal", "offer", "discount", "bundle"];
-var PEOPLE = /customer|client|member|patient|subscriber|employee|staff|agent|cashier|person|user|provider|doctor|manager|contact|buyer|seller|rep\b/i;
-var COMPANIES = /supplier|vendor|employer|company|organi[sz]ation|account|partner|carrier|manufacturer|payer|pharmacy/i;
-var SITES = /store|location|branch|site|warehouse|shop|outlet|office|clinic|hospital/i;
-var PRODUCTS = /product|item|sku|article|goods|drug|feature/i;
-var PROMOS = /promotion|campaign|offer|coupon/i;
-function entityName(subject, i, rng) {
-  if (PEOPLE.test(subject) && !COMPANIES.test(subject)) return `${FIRST[(i * 7 + int(rng, 0, 19)) % 20]} ${LAST[(i * 3 + Math.floor(i / 20)) % 20]}`;
-  if (COMPANIES.test(subject)) return `${COMPANY_A[i % 8]} ${COMPANY_B[Math.floor(i / 8) % 8]}${i >= 64 ? ` ${Math.floor(i / 64) + 1}` : ""}`;
-  if (SITES.test(subject)) return `${CITIES[i % CITIES.length]} ${SITE_SUFFIX[Math.floor(i / CITIES.length) % SITE_SUFFIX.length]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
-  if (PRODUCTS.test(subject)) return `${PRODUCT_ADJ[(5 * Math.floor(i / 12) + i) % 8]} ${PRODUCT_NOUN[i % 12]}${i >= 96 ? ` ${Math.floor(i / 96) + 1}` : ""}`;
-  if (PROMOS.test(subject)) return `${SEASONS[i % 8]} ${OFFERS[Math.floor(i / 8) % 5]}${i >= 40 ? ` ${Math.floor(i / 40) + 1}` : ""}`;
-  return `${subject.replace(/\b\w/g, (c) => c.toUpperCase())} ${i + 1}`;
-}
-function codePrefix(name) {
-  const word = name.split(/[_\s-]+/).find((w) => /[a-z]/i.test(w) && !/^(the|a|an)$/i.test(w)) ?? "ID";
-  return word.slice(0, 3).toUpperCase();
-}
-var pad = (n, width = 5) => String(n).padStart(width, "0");
-function poolFor(attributeName) {
-  return POOLS.find(([re]) => re.test(attributeName))?.[1];
-}
-function attributeValue(col, table, i, rng, level) {
-  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
-  const name = attribute?.name ?? col.name.replace(/_/g, " ");
-  const samples = attribute?.sampleValues;
-  if (samples?.length) {
-    const nameLike = /name|description|title/i.test(name);
-    const raw = level !== void 0 ? samples[level % samples.length] : nameLike ? samples[i % samples.length] : choose(rng, samples);
-    return typed(raw, col.dataType);
-  }
-  switch (col.dataType) {
-    case "boolean":
-      return rng() < 0.3;
-    case "date":
-      return toIso(toTime("2015-01-01") + int(rng, 0, 3650) * DAY);
-    case "integer":
-      return /year/i.test(name) ? int(rng, 2010, 2025) : /age/i.test(name) ? int(rng, 18, 90) : int(rng, 1, 100);
-    case "decimal":
-      return /lat/i.test(name) ? round2(40 + rng() * 25, 5) : /lon|lng/i.test(name) ? round2(-25 + rng() * 45, 5) : round2(rng() * 100, 2);
-    case "text":
-      break;
-  }
-  if (/e-?mail/i.test(name)) return `${FIRST[i % 20].toLowerCase()}.${pad(i + 1, 4)}@example.com`.normalize("NFKD").replace(/[̀-ͯ]/g, "");
-  if (/phone|mobile/i.test(name)) return `+354 555 ${pad(int(rng, 0, 9999), 4)}`;
-  if (/(^|\s)(name|description|title)$/i.test(name) || name.toLowerCase() === table.label.toLowerCase()) {
-    return entityName(`${table.label} ${name}`, i, rng);
-  }
-  if (/\b(id|code|number|no|sku|npi|ndc)\b/i.test(name)) return `${codePrefix(name)}-${pad(i + 1)}`;
-  const pool = poolFor(name);
-  if (pool) {
-    if (level === void 0) return choose(rng, pool);
-    return level < pool.length ? pool[level] : `${pool[level % pool.length]} ${Math.floor(level / pool.length) + 1}`;
-  }
-  const letter = level ?? int(rng, 0, 4);
-  return `${name.replace(/\b\w/, (c) => c.toUpperCase())} ${String.fromCharCode(65 + letter % 26)}${letter >= 26 ? Math.floor(letter / 26) : ""}`;
-}
-function typed(raw, dataType) {
-  if (dataType === "integer" || dataType === "decimal") {
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  }
-  if (dataType === "boolean") return /^(true|yes|y|1|ja|já)$/i.test(raw.trim());
-  return raw;
-}
-function hierarchyLevels(table, project) {
-  const dim = project.dimensions.find((d) => d.id === table.sourceId);
-  if (!dim) return [];
-  const out = [];
-  for (const h of dim.hierarchies) {
-    const levels = h.split(/\s*(?:→|->|>|\/|\|)\s*/).map((l) => l.trim().toLowerCase()).filter(Boolean);
-    const cols = levels.map(
-      (level) => table.columns.find(
-        (c) => c.role === "attribute" && c.source.kind === "attribute" && !c.source.attribute.sampleValues?.length && (c.source.attribute.name.trim().toLowerCase() === level || c.name === level.replace(/\s+/g, "_"))
-      )
-    ).filter((c) => !!c);
-    if (cols.length >= 2) out.push(cols);
-  }
-  return out;
-}
-function planHierarchy(cols) {
-  const poolSize = (c) => poolFor(c.source.kind === "attribute" ? c.source.attribute.name : c.name)?.length;
-  const top = cols.length - 1;
-  let size = Math.min(4, poolSize(cols[top]) ?? 4);
-  const fanout = new Array(cols.length).fill(1);
-  for (let li = top - 1; li >= 0; li--) {
-    fanout[li] = Math.max(1, Math.floor((poolSize(cols[li]) ?? size * 3) / size));
-    size *= fanout[li];
-  }
-  return { cols, leaves: size, fanout };
-}
-function hierarchyPositions(plans, rng) {
-  const out = /* @__PURE__ */ new Map();
-  for (const plan of plans) {
-    let index = int(rng, 0, plan.leaves - 1);
-    plan.cols.forEach((c, li) => {
-      out.set(c.name, index);
-      index = Math.floor(index / plan.fanout[li]);
-    });
-  }
-  return out;
-}
-function defaultRows(table) {
-  if (table.kind === "fact") {
-    return table.factTableType === "accumulating-snapshot" ? 500 : DEFAULT_FACT_ROWS;
-  }
-  const subject = `${table.label}`;
-  if (PEOPLE.test(subject)) return 200;
-  if (PRODUCTS.test(subject)) return 120;
-  if (SITES.test(subject) || COMPANIES.test(subject)) return 30;
-  if (table.columns.length <= 3) return 8;
-  return 25;
-}
-function junkValues(col, table, rng) {
-  const attribute = col.source.kind === "attribute" ? col.source.attribute : void 0;
-  if (attribute?.sampleValues?.length) return [...new Set(attribute.sampleValues.map((v) => typed(v, col.dataType)))];
-  if (col.dataType === "boolean") return [false, true];
-  if (col.dataType === "integer" || col.dataType === "decimal") return [1, 2, 3, 4, 5];
-  if (col.dataType === "date") return ["2025-01-01", "2025-07-01"];
-  const pool = poolFor(attribute?.name ?? col.name);
-  if (pool) return pool.slice(0, 6);
-  return [...new Set(Array.from({ length: 5 }, (_, i) => attributeValue(col, table, i, rng, i)))];
-}
-function junkTable(table, settings) {
-  const rng = random(hash32(`${settings.seed}:${table.name}`));
-  const attrs = table.columns.filter((c) => c.role === "attribute");
-  const domains = attrs.map((c) => junkValues(c, table, rng));
-  const combinations = domains.reduce((n2, d) => n2 * Math.max(1, d.length), 1);
-  const n = Math.min(rowCount(table, settings), combinations);
-  const picked = /* @__PURE__ */ new Set();
-  if (combinations <= 5e3) {
-    const all = Array.from({ length: combinations }, (_, i) => i);
-    for (let i = all.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [all[i], all[j]] = [all[j], all[i]];
-    }
-    all.slice(0, n).forEach((i) => picked.add(i));
-  } else {
-    while (picked.size < n) picked.add(Math.floor(rng() * combinations));
-  }
-  const rows = [];
-  let key = 0;
-  for (let combo of picked) {
-    key += 1;
-    const values = /* @__PURE__ */ new Map();
-    attrs.forEach((c, i) => {
-      const d = domains[i];
-      values.set(c.name, d.length ? d[combo % d.length] : null);
-      combo = Math.floor(combo / Math.max(1, d.length));
-    });
-    rows.push(table.columns.map((c) => c.role === "surrogate-key" ? key : values.get(c.name) ?? null));
-  }
-  return {
-    table: { name: table.name, columns: table.columns.map((c) => c.name), rows },
-    members: rows.map((r) => [{ key: r[0], from: "0000-01-01", to: FAR_FUTURE }])
-  };
-}
-function rowCount(table, settings) {
-  return settings.rows[table.sourceId] ?? defaultRows(table);
-}
-function calendarTable(table, dates) {
-  const rows = dates.map(
-    (iso) => table.columns.map((c) => {
-      if (c.role === "surrogate-key") return dateKey(iso);
-      if (c.source.kind === "generated" && c.source.purpose === "full-date") return iso;
-      if (c.source.kind === "date-part") return datePart(iso, c.source.part, c.name);
-      if (c.source.kind === "attribute") {
-        const a = c.source.attribute;
-        if (a.sampleValues?.length) return typed(a.sampleValues[dateKey(iso) % a.sampleValues.length], c.dataType);
-        return c.dataType === "date" ? iso : c.dataType === "boolean" ? false : `${a.name} ${iso.slice(0, 7)}`;
-      }
-      return null;
-    })
-  );
-  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members: dates.map((iso) => [{ key: dateKey(iso), from: iso, to: iso }]) };
-}
-function memberTable(table, project, settings, dates) {
-  const rng = random(hash32(`${settings.seed}:${table.name}`));
-  const n = rowCount(table, settings);
-  const hierarchies = hierarchyLevels(table, project);
-  const historyCols = new Set(
-    table.columns.filter((c) => c.source.kind === "attribute" && c.source.attribute.scdType === 2).map((c) => c.name)
-  );
-  const rows = [];
-  const members = [];
-  let key = 0;
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  const plans = hierarchies.map(planHierarchy);
-  const movesWithHistory = new Set(hierarchies.filter((cols) => cols.some((c) => historyCols.has(c.name))).flat().map((c) => c.name));
-  for (let i = 0; i < n; i++) {
-    const levelOf = hierarchyPositions(plans, rng);
-    const base = table.columns.map((c) => {
-      if (c.role === "business-key") {
-        if (c.source.kind === "attribute" && c.source.attribute.sampleValues?.length && n <= c.source.attribute.sampleValues.length) {
-          return c.source.attribute.sampleValues[i];
-        }
-        return `${codePrefix(c.source.kind === "attribute" ? c.source.attribute.name : table.label)}-${pad(i + 1)}`;
-      }
-      if (c.role === "attribute") {
-        if (c.source.kind === "generated") return entityName(table.label, i, rng);
-        return attributeValue(c, table, i, rng, levelOf.get(c.name));
-      }
-      return null;
-    });
-    const versions = [];
-    const changes = table.scd2 && historyCols.size > 0 && dates.length > 2 && rng() < 0.25;
-    const changeAt = changes ? dates[int(rng, 1, dates.length - 1)] : null;
-    const spans = changeAt ? [
-      [first, toIso(toTime(changeAt) - DAY), false],
-      [changeAt, FAR_FUTURE, true]
-    ] : [[first, FAR_FUTURE, true]];
-    spans.forEach(([from, to, current], vi) => {
-      key += 1;
-      const moved = vi > 0 ? hierarchyPositions(plans, rng) : null;
-      const row = table.columns.map((c, ci) => {
-        if (moved && movesWithHistory.has(c.name)) return attributeValue(c, table, i, rng, moved.get(c.name));
-        if (c.role === "surrogate-key") return key;
-        if (c.source.kind === "generated" && c.source.purpose === "effective-from") return from;
-        if (c.source.kind === "generated" && c.source.purpose === "effective-to") return to;
-        if (c.source.kind === "generated" && c.source.purpose === "current") return current;
-        if (c.source.kind === "generated" && c.source.purpose === "prior") return null;
-        if (vi > 0 && historyCols.has(c.name)) {
-          let v = attributeValue(c, table, i, rng);
-          for (let tries = 0; tries < 4 && v === base[ci]; tries++) v = attributeValue(c, table, i, rng);
-          return v;
-        }
-        return base[ci] ?? null;
-      });
-      rows.push(row);
-      versions.push({ key, from, to: to === FAR_FUTURE ? last : to });
-    });
-    members.push(versions);
-  }
-  return { table: { name: table.name, columns: table.columns.map((c) => c.name), rows }, members };
-}
-function versionAt(versions, iso) {
-  return (versions.find((v) => v.from <= iso && iso <= v.to) ?? versions[versions.length - 1]).key;
-}
-function measureValue(col, rng, quantity, price) {
-  const m = col.source.kind === "measure" ? col.source.measure : void 0;
-  const name = `${m?.name ?? col.name} ${m?.unit ?? ""}`.toLowerCase();
-  const integer = col.dataType === "integer";
-  if (m?.sampleRange) {
-    const [lo, hi] = m.sampleRange;
-    return integer ? int(rng, Math.ceil(lo), Math.floor(hi)) : round2(lo + rng() * (hi - lo), 2);
-  }
-  const semi = col.additivity === "semi-additive";
-  if (/%|percent|pct|ratio|rate|share/.test(name)) return round2(rng(), 4);
-  if (/lag|duration|time to|hours|minutes|seconds/.test(name)) return integer ? int(rng, 1, 120) : round2(0.5 + rng() * 72, 2);
-  if (integer) {
-    if (/quantity|units|qty/.test(name)) return semi ? int(rng, 0, 500) : quantity;
-    if (/days/.test(name)) return int(rng, 0, 30);
-    if (/seats|users|members|months/.test(name)) return semi ? int(rng, 1, 250) : int(rng, -3, 12);
-    if (/count|events|views|clicks|sessions/.test(name)) return int(rng, 0, 50);
-    return int(rng, 1, 20);
-  }
-  if (/change|delta|difference/.test(name)) return round2((rng() < 0.3 ? -1 : 1) * (10 + rng() * 300), 2);
-  if (semi || /balance|mrr|premium|value at|on hand/.test(name)) return round2(200 + rng() * 2e4, 2);
-  const base = quantity * price;
-  const share = (lo, hi) => round2(base * (lo + rng() * (hi - lo)), 2);
-  if (/discount|rebate|reduction|markdown/.test(name)) return rng() < 0.6 ? 0 : share(0.05, 0.25);
-  if (/tax|vat/.test(name)) return share(0.1, 0.24);
-  if (/cost/.test(name)) return share(0.55, 0.75);
-  if (/margin|profit/.test(name)) return share(0.15, 0.4);
-  if (/unit price|price/.test(name)) return round2(price, 2);
-  if (/allowed/.test(name)) return share(0.7, 0.95);
-  if (/paid/.test(name)) return share(0.5, 0.85);
-  if (/responsibility|copay|deductible/.test(name)) return share(0.05, 0.2);
-  return round2(base, 2);
-}
-function factData(table, model, dims, settings, dates) {
-  const rng = random(hash32(`${settings.seed}:${table.name}`));
-  const n = rowCount(table, settings);
-  const calendar = new Set(model.tables.filter((t) => t.calendar).map((t) => t.name));
-  const monthEnds = dates.filter((iso, i) => i === dates.length - 1 || dates[i + 1].slice(5, 7) !== iso.slice(5, 7));
-  const rows = [];
-  let group = 0;
-  for (let r = 0; r < n; r++) {
-    const snapshot = table.factTableType === "periodic-snapshot";
-    let dayIndex = snapshot ? dates.indexOf(choose(rng, monthEnds)) : int(rng, 0, dates.length - 1);
-    const baseDate = dates[dayIndex];
-    const quantity = 1 + Math.floor(Math.pow(rng(), 2) * 8);
-    const price = 2 + Math.pow(rng(), 2) * 150;
-    if (r === 0 || rng() < 0.4) group += 1;
-    let firstDate = true;
-    const row = table.columns.map((c) => {
-      if (c.role === "foreign-key" && c.references) {
-        if (calendar.has(c.references.table)) {
-          if (!firstDate) dayIndex = Math.min(dates.length - 1, dayIndex + int(rng, 0, 6));
-          firstDate = false;
-          return dateKey(dates[dayIndex]);
-        }
-        const dim = dims.get(c.references.table);
-        if (!dim || dim.members.length === 0) return null;
-        return versionAt(dim.members[skewed(rng, dim.members.length)], baseDate);
-      }
-      if (c.role === "degenerate") {
-        const id2 = table.factTableType === "transaction" ? group : r + 1;
-        return `${codePrefix(c.name)}-${pad(id2, 6)}`;
-      }
-      if (c.role === "measure") return measureValue(c, rng, quantity, price);
-      return null;
-    });
-    rows.push(row);
-  }
-  return { name: table.name, columns: table.columns.map((c) => c.name), rows };
-}
-function generateSampleData(project, model = physicalModel(project), settings = physicalSettings(project)) {
-  const dates = sampleDates(settings);
-  const dims = /* @__PURE__ */ new Map();
-  for (const t of model.tables.filter((x) => x.kind === "dimension")) {
-    dims.set(t.name, t.calendar ? calendarTable(t, dates) : t.junk ? junkTable(t, settings) : memberTable(t, project, settings, dates));
-  }
-  const tables = {};
-  for (const [name, d] of dims) tables[name] = d.table;
-  for (const t of model.tables.filter((x) => x.kind === "fact")) tables[t.name] = factData(t, model, dims, settings, dates);
-  return { settings, tables };
-}
-function sqlLiteral(value, dialect) {
-  if (value === null) return "NULL";
-  if (typeof value === "boolean") return dialect === "sqlserver" ? value ? "1" : "0" : value ? "TRUE" : "FALSE";
-  if (typeof value === "number") return String(value);
-  const text = value.replace(/'/g, "''");
-  return dialect === "sqlserver" ? `N'${text}'` : `'${text}'`;
-}
-function seedScript(project, dataset, dialect, model = physicalModel(project)) {
-  const out = [
-    `-- ${displayName(project.meta, "Untitled project")}: sample data (made up, not real) for ${dialect === "postgres" ? "PostgreSQL" : dialect === "sqlserver" ? "SQL Server" : "Snowflake"}`,
-    `-- Seed ${dataset.settings.seed}, dates ${dataset.settings.dateFrom} to ${dataset.settings.dateTo}. Run after the CREATE TABLE script.`
-  ];
-  const batch = 500;
-  for (const t of [...model.tables.filter((x) => x.kind === "dimension"), ...model.tables.filter((x) => x.kind === "fact")]) {
-    const data = dataset.tables[t.name];
-    if (!data || data.rows.length === 0) continue;
-    const identity = t.kind === "dimension" && !t.calendar;
-    out.push("", `-- ${t.name}: ${data.rows.length} rows`);
-    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} ON;`);
-    for (let i = 0; i < data.rows.length; i += batch) {
-      const rows = data.rows.slice(i, i + batch).map((row) => `  (${row.map((v) => sqlLiteral(v, dialect)).join(", ")})`);
-      out.push(`INSERT INTO ${t.name} (${data.columns.join(", ")}) VALUES
-${rows.join(",\n")};`);
-    }
-    if (identity && dialect === "sqlserver") out.push(`SET IDENTITY_INSERT ${t.name} OFF;`);
-    if (identity && dialect === "postgres" && t.keyColumn) {
-      out.push(`SELECT setval(pg_get_serial_sequence('${t.name}', '${t.keyColumn}'), (SELECT max(${t.keyColumn}) FROM ${t.name}));`);
-    }
-  }
-  return out.join("\n") + "\n";
-}
-function tableToCsv(table) {
-  const cell = (v) => v === null ? "" : typeof v === "string" ? csvCell(v) : String(v);
-  return "\uFEFF" + [table.columns.join(","), ...table.rows.map((r) => r.map(cell).join(","))].join("\r\n") + "\r\n";
-}
-
-// src/core/explore.ts
-var dimensionOf = (model, fk) => model.tables.find((t) => t.name === fk.references?.table);
-var PREFERRED_DATE = ["year-month", "month-name", "quarter", "year", "fiscal-period", "day-of-week"];
-var LOW_CARDINALITY = /category|segment|region|type|brand|channel|class|group|tier|department|format|status|country|specialty|plan|edition|industry|band/;
-function preferredAttribute(dim) {
-  const attrs = dim.columns.filter((c) => c.role === "attribute" || c.role === "business-key");
-  if (dim.calendar) {
-    for (const part of PREFERRED_DATE) {
-      const hit = attrs.find((c) => c.source.kind === "date-part" && c.source.part === part);
-      if (hit) return hit.name;
-    }
-  }
-  return attrs.find((c) => c.role === "attribute" && c.dataType === "text" && LOW_CARDINALITY.test(c.name))?.name ?? attrs.find((c) => c.role === "attribute" && c.dataType === "text")?.name ?? attrs[0]?.name;
-}
-function defaultAggregate(additivity) {
-  return additivity === void 0 ? "count" : additivity === "additive" ? "sum" : "avg";
-}
-var HEADLINE = [/net_.*amount|sales_amount|revenue|mrr|invoice_amount|billed|paid_amount/, /amount|value/];
-function defaultQuery(model, fact) {
-  const measures = fact.columns.filter((c) => c.role === "measure");
-  const additive = measures.filter((m) => m.additivity === "additive");
-  const measure = HEADLINE.map((re) => additive.find((m) => re.test(m.name))).find(Boolean) ?? additive[0] ?? measures[0];
-  const fks = fact.columns.filter((c) => c.role === "foreign-key");
-  const nonDate = fks.find((c) => !dimensionOf(model, c)?.calendar) ?? fks[0];
-  const groupBy = [];
-  const dim = nonDate && dimensionOf(model, nonDate);
-  const attribute = dim && preferredAttribute(dim);
-  if (nonDate && attribute) groupBy.push({ column: nonDate.name, attribute });
-  return { fact: fact.name, measure: measure?.name ?? null, aggregate: defaultAggregate(measure?.additivity), groupBy, limit: 20 };
-}
-var RESERVED_ALIASES = /* @__PURE__ */ new Set(["as", "at", "by", "do", "f", "if", "in", "is", "of", "on", "or", "to"]);
-function aliasFor(column, used) {
-  const base = column.replace(/_key$/, "").split("_").filter(Boolean).map((w) => w[0]).join("") || "d";
-  let alias = base;
-  for (let n = 2; used.has(alias) || RESERVED_ALIASES.has(alias); n++) alias = `${base}${n}`;
-  used.add(alias);
-  return alias;
-}
-function querySql(model, query, dialect) {
-  const fact = model.tables.find((t) => t.name === query.fact);
-  if (!fact) return "";
-  const used = /* @__PURE__ */ new Set(["f"]);
-  const joins = /* @__PURE__ */ new Map();
-  const ref = (g) => {
-    if (!g.attribute) return `f.${g.column}`;
-    let j = joins.get(g.column);
-    if (!j) {
-      const fk = fact.columns.find((c) => c.name === g.column);
-      j = { alias: aliasFor(g.column, used), dim: dimensionOf(model, fk), fk };
-      joins.set(g.column, j);
-    }
-    return `${j.alias}.${g.attribute}`;
-  };
-  const groups = query.groupBy.map(ref);
-  const filter = query.filter ? `${ref(query.filter.by)} = ${sqlLiteral(query.filter.value, dialect)}` : null;
-  const measure = fact.columns.find((c) => c.name === query.measure);
-  const valueAlias = measure && query.aggregate !== "count" ? `${query.aggregate}_${measure.name}` : "row_count";
-  let value = "COUNT(*)";
-  if (measure && query.aggregate !== "count") {
-    const arg = dialect === "sqlserver" && query.aggregate === "avg" && measure.dataType === "integer" ? `CAST(f.${measure.name} AS decimal(18,4))` : `f.${measure.name}`;
-    value = `${query.aggregate.toUpperCase()}(${arg})`;
-  }
-  const limit = query.limit ?? 20;
-  const select = [...groups, `${value} AS ${valueAlias}`];
-  const lines = [`SELECT${dialect === "sqlserver" ? ` TOP (${limit})` : ""}`, `  ${select.join(",\n  ")}`, `FROM ${fact.name} AS f`];
-  for (const j of joins.values()) lines.push(`JOIN ${j.dim.name} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
-  if (filter) lines.push(`WHERE ${filter}`);
-  if (groups.length) lines.push(`GROUP BY ${groups.join(", ")}`);
-  lines.push(`ORDER BY ${valueAlias} DESC`);
-  if (dialect !== "sqlserver") lines.push(`LIMIT ${limit}`);
-  return lines.join("\n") + ";";
-}
-
 // src/core/prototype.ts
 var SANDBOX_PORT = 5433;
 var POSTGRES_IMAGE = "postgres:17-alpine";
@@ -3703,9 +3885,20 @@ function compose(project) {
     ""
   ].join("\n");
 }
+var comment2 = (text) => text.replace(/\s+/g, " ").trim();
 function exampleQueries(project, dialect) {
   const model = physicalModel(project);
-  const out = [`-- Example queries for ${displayName(project.meta, "Untitled project")} (${optionLabel(SQL_DIALECTS, dialect)}).`, "-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements."];
+  const out = [`-- Queries for ${displayName(project.meta, "Untitled project")} (${optionLabel(SQL_DIALECTS, dialect)}).`];
+  const answered = requirementAnswers(project, model).filter((a) => a.query);
+  if (answered.length) {
+    out.push("", "-- ─── Requirements: the saved query that answers each one ───");
+    for (const a of answered) {
+      const r = a.requirement;
+      out.push("", `-- ${a.label} (${optionLabel(PRIORITIES, r.priority)}): ${comment2(r.statement) || "untitled"}`, `-- ${comment2(a.description)}`, querySql(model, a.query, dialect));
+    }
+    out.push("", "-- ─── Examples ───");
+  }
+  out.push("-- One per fact table: its first additive measure by a descriptive attribute. Adapt them to your requirements.");
   for (const fact of model.tables.filter((t) => t.kind === "fact")) {
     const q = defaultQuery(model, fact);
     out.push("", `-- ${fact.label}${fact.grain ? `: ${fact.grain}` : ""}`, querySql(model, q, dialect));
@@ -3752,7 +3945,7 @@ To start again after changing the design, write a new bundle and run \`docker co
 | \`initdb/02-data.sql\` | The sample rows as INSERT statements |
 | \`schema.sql\` | CREATE TABLE script for ${dialect}, your target platform |
 | \`index-recommendations.md\` | Which keys and indexes to create, now and later, and why |
-| \`queries.sql\` | Example star-join queries |
+| \`queries.sql\` | The saved queries that answer your requirements, and example star-join queries |
 | \`data/*.csv\` | The sample rows as CSV, to load anywhere |
 
 ## Before you build for real

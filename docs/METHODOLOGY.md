@@ -63,11 +63,13 @@ The validator encodes common review comments. Rule codes are stable so the skill
 | KD106 | warning | Every requirement is linked to a process |
 | KD107 | warning | Names are unique (case-insensitive) |
 | KD108 | warning | Every process has a date dimension |
+| KD109 | warning | A requirement's saved prototype query still matches the design |
 | KD201 | info | Grain is phrased "One row per …" |
 | KD202 | info | Dimension used by a single process (not yet conformed) |
 | KD203 | info | Accumulating snapshots have ≥ 2 date roles |
 | KD204 | info | Planned stakeholder interviews not done yet |
 | KD205 | info | Process has no business value / feasibility score |
+| KD206 | info | Must-have requirement not answered by a prototype query (once any requirement has one) |
 
 ## Further reading
 

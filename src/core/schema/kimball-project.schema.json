@@ -94,7 +94,41 @@
         "priority": { "enum": ["must", "should", "could", "wont"] },
         "stakeholderIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
         "processIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
-        "notes": { "type": "string" }
+        "notes": { "type": "string" },
+        "query": { "$ref": "#/$defs/requirementQuery" }
+      },
+      "additionalProperties": false
+    },
+    "requirementQuery": {
+      "type": "object",
+      "description": "The prototype question that answers the requirement, in design terms (ids and role names), so renaming a process, fact, dimension or attribute keeps it.",
+      "required": ["processId", "aggregate", "groupBy"],
+      "properties": {
+        "processId": { "$ref": "#/$defs/id", "description": "The business process (fact table) to query." },
+        "measureId": { "$ref": "#/$defs/id", "description": "The fact to aggregate. Absent when the aggregate is \"count\"." },
+        "aggregate": { "enum": ["sum", "avg", "min", "max", "count"] },
+        "groupBy": { "type": "array", "items": { "$ref": "#/$defs/queryColumn" }, "maxItems": 2 },
+        "filter": {
+          "type": "object",
+          "required": ["column", "value"],
+          "properties": {
+            "column": { "$ref": "#/$defs/queryColumn" },
+            "value": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "queryColumn": {
+      "type": "object",
+      "description": "A dimension column: the dimension, its role (for role-playing dimensions) and the attribute. With neither attributeId nor column it is a degenerate dimension.",
+      "required": ["dimensionId"],
+      "properties": {
+        "dimensionId": { "$ref": "#/$defs/id" },
+        "role": { "type": "string", "description": "Role name exactly as in the process's dimension usage, e.g. \"Order date\". Absent for a single, unnamed role." },
+        "attributeId": { "$ref": "#/$defs/id" },
+        "column": { "type": "string", "description": "A column the prototype adds that isn't an attribute in the design, e.g. \"month_name\" or \"full_date\"." }
       },
       "additionalProperties": false
     },

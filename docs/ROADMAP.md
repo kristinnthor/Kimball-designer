@@ -32,7 +32,7 @@ Playwright e2e (#33), accessibility (#34), hosted UI on GitHub Pages at kimball.
 In-app Help page that explains what the process delivers (#45), guided demos with a step-by-step demo bar (#46), and a user guide generated from the same content for GitHub and the skill (#47).
 
 ## M6 · Prototype and review
-Owner requests after M5: readable open questions (#49), varied example text (#50), stakeholders as owners (#51), the Prototype phase with sample data and a Docker sandbox (#52), CREATE TABLE scripts with index recommendations (#53), and fixes from a full product review (#54).
+Owner requests after M5: readable open questions (#49), varied example text (#50), stakeholders as owners (#51), the Prototype phase with sample data and a Docker sandbox (#52), CREATE TABLE scripts with index recommendations (#53), fixes from a full product review (#54), UI polish (#56), and saving the prototype query that answers each requirement (#58).
 
 ## After v1.0 (ideas, not scheduled)
 - Detailed design phase: attribute-level dimension design, SCD strategy per attribute, source-to-target mapping.

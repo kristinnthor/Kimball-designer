@@ -43,6 +43,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Text areas grow with their content; assumptions and open questions are full width, so long text is readable (#49).
 - Example text in empty fields varies per item and follows the process or dimension name (#50).
 - Removing a process, dimension, stakeholder or requirement offers Undo; only a just-added item takes focus; the bus matrix keeps its column order while you edit; a bubble opens its dimension (#54).
+- Requirement traceability to the prototype (#58): save the explorer question that answers each requirement (`requirements[].query`, stored by id, so renaming a process, fact, dimension or attribute keeps it). The Prototype phase lists which requirements are answered, which aren't, and which saved queries no longer match the design. The requirements document gets an *Answered by* column, `queries.sql` starts with each requirement's SQL, and two new rules check them: KD109 (a saved query no longer matches the design) and KD206 (a must-have isn't answered yet). The examples answer some of their requirements.
 
 ### Fixed
 - Pluralisation in phase details ("business processes").
