@@ -132,7 +132,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
-| 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | _this PR_ |
+| 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | [#59](https://github.com/kristinnthor/Kimball-designer/pull/59) |
 | 2026-11-02 | UI polish from the review: keyboard-operable bubbles, legend layout, phone layout (header, stepper, no sideways scroll), coach Escape, priority grid labels, quieter save announcements, labelled chip groups (#56) | [#57](https://github.com/kristinnthor/Kimball-designer/pull/57) |
 | 2026-11-02 | Prototype & review (owner request): phase 11 *Prototype* with sample data, explorer, CREATE TABLE scripts for PostgreSQL/SQL Server/Snowflake with index advice, Docker sandbox, `kimball ddl`/`prototype`; readable open questions, varied examples, stakeholders as owners; fixes from a full review of core, CLI and UI (#49–#54) | [#55](https://github.com/kristinnthor/Kimball-designer/pull/55) |
 | 2026-11-01 | Help & onboarding (owner request): Help page explaining what the process delivers, guided demos with a demo bar, user guide generated for GitHub and the skill (#45–#47) | [#48](https://github.com/kristinnthor/Kimball-designer/pull/48) |
