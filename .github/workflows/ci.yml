@@ -64,6 +64,9 @@ jobs:
           node $K summary tmp/retail.kimball.json
           node $K render tmp/retail.kimball.json --out tmp/out
           test -f tmp/out/requirements.md && test -f tmp/out/bubbles/retail-sales.svg
+          node $K ddl tmp/retail.kimball.json --dialect sqlserver --out tmp/schema.sql
+          node $K prototype tmp/retail.kimball.json --out tmp/proto
+          test -f tmp/schema.sql && test -f tmp/proto/docker-compose.yml && test -f tmp/proto/initdb/02-data.sql
 
   e2e:
     name: End-to-end · accessibility
