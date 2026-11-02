@@ -143,19 +143,32 @@ function queryColumn(v: unknown): QueryColumn | null {
   return out;
 }
 
-/** A saved query, kept even when it no longer matches the design (validation reports that). */
+/**
+ * A saved query, kept even when it no longer matches the design (validation reports that).
+ * A malformed one is dropped instead of being read as a different question: an unknown
+ * aggregate, a sum without a fact, a column without a dimension, more than two groups.
+ */
 function normalizeQuery(v: unknown): RequirementQuery | undefined {
   if (!isObj(v) || !safeId(v.processId)) return undefined;
   const measureId = safeId(v.measureId);
-  const aggregate = oneOf(v.aggregate, AGGREGATES, measureId ? 'sum' : 'count');
+  if (v.aggregate != null && !AGGREGATES.includes(v.aggregate as Aggregate)) return undefined;
+  const aggregate = (v.aggregate as Aggregate | undefined) ?? (measureId ? 'sum' : 'count');
+  if (aggregate !== 'count' && !measureId) return undefined;
+  const groups = v.groupBy ?? [];
+  if (!Array.isArray(groups) || groups.length > QUERY_GROUPS_MAX) return undefined;
+  const groupBy = groups.map(queryColumn);
+  if (groupBy.some((c) => c === null)) return undefined;
   const query: RequirementQuery = {
     processId: safeId(v.processId),
-    ...(measureId && aggregate !== 'count' ? { measureId } : {}),
-    aggregate: measureId ? aggregate : 'count',
-    groupBy: (Array.isArray(v.groupBy) ? v.groupBy : []).map(queryColumn).filter((c): c is QueryColumn => c !== null).slice(0, QUERY_GROUPS_MAX),
+    ...(aggregate !== 'count' ? { measureId } : {}),
+    aggregate,
+    groupBy: groupBy as QueryColumn[],
   };
-  const filter = isObj(v.filter) ? queryColumn(v.filter.column) : null;
-  if (filter && isObj(v.filter)) query.filter = { column: filter, value: str(v.filter.value) };
+  if (v.filter != null) {
+    const column = isObj(v.filter) ? queryColumn(v.filter.column) : null;
+    if (!column || !isObj(v.filter)) return undefined;
+    query.filter = { column, value: str(v.filter.value) };
+  }
   return query;
 }
 

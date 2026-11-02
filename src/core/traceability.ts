@@ -27,9 +27,10 @@ export function toRequirementQuery(model: PhysicalModel, query: ExploreQuery): R
     const a = model.tables.find((t) => t.name === c.references?.table)?.columns.find((x) => x.name === g.attribute);
     if (!a) return null;
     const attributeId = attributeIdOf(a);
+    const role = c.source.role?.trim();
     return {
       dimensionId: c.source.dimensionId,
-      ...(c.source.role ? { role: c.source.role } : {}),
+      ...(role ? { role } : {}),
       ...(attributeId ? { attributeId } : { column: a.name }),
     };
   };
@@ -54,7 +55,8 @@ export function toRequirementQuery(model: PhysicalModel, query: ExploreQuery): R
 /** The saved query as an explorer query, or null when it no longer matches the design. */
 export function fromRequirementQuery(model: PhysicalModel, query: RequirementQuery): ExploreQuery | null {
   const fact = model.tables.find((t) => t.kind === 'fact' && t.sourceId === query.processId);
-  if (!fact) return null;
+  // A fact table without dimension keys can't be explored, so its query can't be shown either.
+  if (!fact?.columns.some((c) => c.role === 'foreign-key' || c.role === 'degenerate')) return null;
   const options = new Set(groupOptions(model, fact).map((o) => o.key));
   const by = (q: QueryColumn): GroupBy | null => {
     let g: GroupBy | undefined;
@@ -63,10 +65,11 @@ export function fromRequirementQuery(model: PhysicalModel, query: RequirementQue
       g = c && { column: c.name };
     } else {
       const fk = fact.columns.find(
-        (x) => x.source.kind === 'usage' && x.source.dimensionId === q.dimensionId && (x.source.role ?? '') === (q.role ?? ''),
+        (x) => x.source.kind === 'usage' && x.source.dimensionId === q.dimensionId && (x.source.role ?? '').trim() === (q.role ?? '').trim(),
       );
       const dim = fk && model.tables.find((t) => t.name === fk.references?.table);
-      const a = dim?.columns.find((x) => (q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column && !attributeIdOf(x)));
+      // Added columns go by name, so "month_name" still matches once the design lists a Month name attribute.
+      const a = dim?.columns.find((x) => (q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column));
       g = fk && a && { column: fk.name, attribute: a.name };
     }
     return g && options.has(groupKey(g)) ? g : null;
@@ -96,9 +99,9 @@ export function describeRequirementQuery(project: KimballProject, query: Require
   const process = processById(project, query.processId);
   const measure = process?.facts.find((f) => f.id === query.measureId);
   const what =
-    query.aggregate === 'count' || !measure
+    query.aggregate === 'count'
       ? 'number of rows'
-      : `${AGGREGATES.find((a) => a.value === query.aggregate)!.label.toLowerCase()} of ${displayName(measure)}`;
+      : `${AGGREGATES.find((a) => a.value === query.aggregate)!.label.toLowerCase()} of ${measure ? displayName(measure) : `a missing fact (${query.measureId})`}`;
   const column = (q: QueryColumn) => {
     const dim = dimensionById(project, q.dimensionId);
     const subject = q.role?.trim() || (dim ? displayName(dim) : q.dimensionId);

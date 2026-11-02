@@ -147,4 +147,29 @@ describe('App', () => {
     fireEvent.click(within(bar).getByRole('button', { name: 'Exit demo' }));
     expect(screen.queryByRole('region', { name: /^Demo:/ })).toBeNull();
   });
+  it('keeps focus in the requirement table when an answer is saved or removed', async () => {
+    const { App, store } = await setup();
+    store.replace(loadExample('retail'), { resetHistory: true });
+    render(<App />);
+    await go('/prototype');
+    const use = screen.getByRole('button', { name: 'Use the question above for R3' });
+    use.focus();
+    fireEvent.click(use);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Show the query for R3');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the answer to R1' }));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Use the question above for R1');
+  });
+
+  it('shows a saved filter value that the sample data lacks', async () => {
+    const { App, store } = await setup();
+    const project = loadExample('retail');
+    project.requirements[0]!.query!.filter = { column: { dimensionId: 'dm_store', attributeId: 'at_store_region' }, value: 'Atlantis' };
+    store.replace(project, { resetHistory: true });
+    render(<App />);
+    await go('/prototype');
+    fireEvent.click(screen.getByRole('button', { name: 'Show the query for R1' }));
+    const equals = screen.getByRole('combobox', { name: 'equals' }) as HTMLSelectElement;
+    expect(equals.value).toBe('Atlantis');
+    expect(equals.selectedOptions[0]!.textContent).toBe('Atlantis (not in the sample data)');
+  });
 });
