@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-02
+
 ### Added
 - Brand identity: logo mark, lockups, social preview, design tokens and guidelines (`brand/`).
 - Process runbook, architecture overview, decision records, methodology and roadmap (`docs/`).
