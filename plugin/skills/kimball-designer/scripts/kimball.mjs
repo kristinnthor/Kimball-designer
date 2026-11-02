@@ -432,9 +432,12 @@ function sqlName(text, fallback = "item") {
   if (/^[0-9]/.test(name)) name = `n_${name}`;
   return name;
 }
-function uniqueName(name, used) {
-  let candidate = name;
-  for (let n = 2; used.has(candidate); n++) candidate = `${name}_${n}`;
+var NAME_MAX = 63;
+var TABLE_NAME_MAX = NAME_MAX - "sample_".length;
+function uniqueName(name, used, max = NAME_MAX) {
+  const fit = (suffix) => `${name.slice(0, max - suffix.length).replace(/_+$/, "")}${suffix}`;
+  let candidate = fit("");
+  for (let n = 2; used.has(candidate); n++) candidate = fit(`_${n}`);
   used.add(candidate);
   return candidate;
 }
@@ -645,18 +648,28 @@ function dimensionTable(dim, tableName) {
 function roleKeyName(role, subject) {
   if (!role) return `${subject}_key`;
   const r = sqlName(role, subject);
-  return `_${r}_`.includes(`_${subject}_`) ? `${r}_key` : `${r}_${subject}_key`;
+  const name = `_${r}_`.includes(`_${subject}_`) ? `${r}_key` : `${r}_${subject}_key`;
+  return name.length <= NAME_MAX ? name : `${name.slice(0, NAME_MAX - 6).replace(/_+$/, "")}_key`;
 }
 function factTable(process2, tableName, dims) {
   const used = /* @__PURE__ */ new Set();
   const columns = [];
   const subject = sqlName(displayName(process2, "fact"), "fact");
+  const uses = /* @__PURE__ */ new Set();
+  const firstUse = (dimensionId, role) => {
+    const use = `${dimensionId}
+${role?.trim() ?? ""}`;
+    if (uses.has(use)) return false;
+    uses.add(use);
+    return true;
+  };
   for (const usage of process2.dimensions) {
     const entry = dims.get(usage.dimensionId);
     if (!entry) continue;
     const { dimension, table } = entry;
     const dimSubject = sqlName(displayName(dimension, "dimension"), "dimension");
     if (!table) {
+      if (!firstUse(dimension.id, null)) continue;
       columns.push({
         name: columnName(displayName(dimension, "reference"), subject, used),
         role: "degenerate",
@@ -669,7 +682,7 @@ function factTable(process2, tableName, dims) {
       continue;
     }
     const roles = usage.roles.length ? usage.roles : [null];
-    for (const role of roles) {
+    for (const role of roles.filter((r) => firstUse(dimension.id, r))) {
       columns.push({
         name: uniqueName(roleKeyName(role, dimSubject), used),
         role: "foreign-key",
@@ -716,12 +729,12 @@ function physicalModel(project) {
       dims.set(dim.id, { dimension: dim, table: null });
       continue;
     }
-    const table = dimensionTable(dim, uniqueName(`dim_${sqlName(displayName(dim, "dimension"), "dimension")}`, tableNames));
+    const table = dimensionTable(dim, uniqueName(`dim_${sqlName(displayName(dim, "dimension"), "dimension")}`, tableNames, TABLE_NAME_MAX));
     dims.set(dim.id, { dimension: dim, table });
     tables.push(table);
   }
   for (const p of project.processes) {
-    const name = uniqueName(`fact_${sqlName(displayName(p, "process"), "process")}`, tableNames);
+    const name = uniqueName(`fact_${sqlName(displayName(p, "process"), "process")}`, tableNames, TABLE_NAME_MAX);
     const table = factTable(p, name, dims);
     if (!table.columns.some((c) => c.role === "foreign-key" || c.role === "degenerate")) {
       notes.push(`${table.label} has no dimensions yet, so its fact table has no keys. Add dimensions in phase 6.`);

@@ -68,6 +68,29 @@ jobs:
           node $K prototype tmp/retail.kimball.json --out tmp/proto
           test -f tmp/schema.sql && test -f tmp/proto/docker-compose.yml && test -f tmp/proto/initdb/02-data.sql
 
+  prototype:
+    name: Sandbox and dbt · dbt ${{ matrix.dbt }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest version the generated project accepts, and the newest.
+        dbt: ['1.10.8', latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dbt with the PostgreSQL adapter
+        run: |
+          if [ '${{ matrix.dbt }}' = latest ]; then pip install dbt-core dbt-postgres; else pip install 'dbt-core==${{ matrix.dbt }}' dbt-postgres; fi
+          dbt --version
+      - name: Run each example's prototype bundle (sandbox, queries, dbt)
+        run: for example in retail saas healthcare; do bash scripts/check-prototype.sh "$example"; done
+
   e2e:
     name: End-to-end · accessibility
     runs-on: ubuntu-latest

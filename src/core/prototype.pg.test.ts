@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { EXAMPLES, loadExample } from './examples';
 import { ddlScript } from './ddl';
+import { createDimension, createMeasure, createProcess, createProject } from './model';
 import { defaultQuery, querySql, runQuery } from './explore';
 import { physicalModel } from './physical';
 import { generateSampleData, seedScript } from './sampledata';
@@ -45,6 +46,34 @@ describe('PostgreSQL scripts', () => {
         for (const [key, value] of expected) {
           expect(Math.abs((actual.get(key) ?? NaN) - (value ?? NaN)), `${a.label} ${key}`).toBeLessThanOrEqual(0.011);
         }
+      }
+    } finally {
+      await db.close();
+    }
+  }, 60_000);
+
+  it('keeps long names apart, which PostgreSQL would cut at 63 characters', async () => {
+    const project = createProject('Long names');
+    const long = 'Customer account relationship history across every sales channel';
+    const dim = createDimension({ name: long });
+    project.dimensions.push(dim);
+    for (const suffix of ['by day', 'by week']) {
+      const roles = [`Primary ${long}`, `Secondary ${long}`, `Primary ${long} too`];
+      project.processes.push(createProcess({ name: `${long} ${suffix}`, dimensions: [{ dimensionId: dim.id, roles }], facts: [createMeasure({ name: 'Amount' })] }));
+    }
+    project.physical = { dialect: 'postgres', seed: 1, dateFrom: '2025-01-01', dateTo: '2025-01-31', rows: {} };
+    const model = physicalModel(project);
+    const data = generateSampleData(project, model);
+    const db = new PGlite();
+    try {
+      await db.exec(ddlScript(project, { dialect: 'postgres', model }));
+      await db.exec(seedScript(project, data, 'postgres', model));
+      for (const t of model.tables) {
+        const { rows } = await db.query<{ column_name: string }>(
+          `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+          [t.name],
+        );
+        expect(rows.map((r) => r.column_name)).toEqual(t.columns.map((c) => c.name));
       }
     } finally {
       await db.close();

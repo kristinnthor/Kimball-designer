@@ -98,6 +98,7 @@ npm run build:docs     # regenerate docs/USER-GUIDE.md + the skill reference fro
 npm run check          # everything CI runs (except e2e)
 npx playwright install chromium  # once
 npm run test:e2e       # Playwright: wizard, live sync, axe accessibility
+bash scripts/check-prototype.sh retail  # an example's bundle for real: Docker sandbox, queries.sql, dbt (needs Docker, Python, dbt-postgres)
 ```
 
 ## 5. Decisions awaiting the owner
@@ -132,6 +133,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-02 | Real dbt and the Docker sandbox in CI: every example's bundle runs `docker compose`, `queries.sql`, `dbt seed`/`run`/`test` and the analyses on dbt 1.10.8 and the newest (#63); generated names within 63 characters and one key per repeated dimension use (#64) | [#65](https://github.com/kristinnthor/Kimball-designer/pull/65) |
 | 2026-11-02 | v1.0.0 release notes refreshed: eleven phases in four stages, 18 rules, the Prototype phase (CREATE TABLE scripts, sandbox, dbt project, requirement answers) and the hosted UI; the brand guide lists the *Build* stage (#36) | [#62](https://github.com/kristinnthor/Kimball-designer/pull/62) |
 | 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | [#61](https://github.com/kristinnthor/Kimball-designer/pull/61) |
 | 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | [#59](https://github.com/kristinnthor/Kimball-designer/pull/59) |
