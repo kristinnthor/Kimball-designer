@@ -76,11 +76,13 @@ Score each process 1–5 for **business value** and **feasibility** (data availa
 | KD106 | warning | Every requirement links to a process | Link it, or a process is missing |
 | KD107 | warning | Names are unique | Rename or merge |
 | KD108 | warning | Every process has a date dimension | Add Date (with a role) |
+| KD109 | warning | Saved requirement query matches the design | Rebuild the query and save it again |
 | KD201 | info | Grain phrased "One row per …" | Rephrase |
 | KD202 | info | Dimension used by one process only | Check whether others share it |
 | KD203 | info | Accumulating snapshot has < 2 date roles | Add a role per milestone |
 | KD204 | info | Planned interviews not done | Mark done/skipped |
 | KD205 | info | Process not scored | Score value and feasibility |
+| KD206 | info | Must-have not answered by a prototype query | Propose a query, or name the missing piece |
 
 ## Further reading
 

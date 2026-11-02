@@ -154,7 +154,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     contains: [
       'Overview: purpose, sponsor, scope in and out, success criteria.',
       'Stakeholders and interview status.',
-      'Business requirements with priority, KPIs, who raised them and which processes answer them.',
+      'Business requirements with priority, KPIs, who raised them, which processes answer them and, once you use the prototype, the query that answers each one.',
       'Each business process with grain, fact table type, dimensions, facts and its bubble diagram.',
       'The dimension catalogue with kinds, key attributes, hierarchies and where each is used.',
       'The bus matrix, the prioritisation, assumptions and open questions.',
@@ -177,7 +177,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     id: 'review',
     title: 'Validation report',
     formats: 'In the UI, `kimball validate` (text or `--json`)',
-    summary: 'The model checked against 16 Kimball best-practice rules, each with a hint on how to fix it.',
+    summary: 'The model checked against 18 Kimball best-practice rules, each with a hint on how to fix it.',
     contains: ['Errors (broken references, missing names), warnings (no grain, no date dimension, unused dimensions) and notes.', 'A link from each finding to the phase where you fix it.'],
     usedBy: 'Whoever runs the process, before sharing anything.',
     why: 'It catches the classic mistakes early: processes without a grain, facts without dimensions, dimensions nobody shares.',
@@ -206,13 +206,15 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
   {
     id: 'prototype',
     title: 'Prototype: sample data, SQL and a sandbox',
-    formats: 'In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV · `kimball prototype`, `kimball ddl`',
+    formats: 'In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV, a dbt project · `kimball prototype`, `kimball ddl`',
     summary: 'Your design as a star schema filled with made-up rows, a CREATE TABLE script with index advice, and a PostgreSQL sandbox for Docker.',
     contains: [
       'One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).',
       'Sample rows you can group and filter in the browser, with the matching SQL.',
+      'The question that answers each requirement, saved with it: the requirements document shows it and `queries.sql` gets its SQL.',
       'CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).',
       'A Docker Compose sandbox that loads the tables and data on first start.',
+      'A dbt project: a model per table with descriptions and tests (unique and not-null keys, every fact key found in its dimension), with the sample rows as seeds so it runs against the sandbox as it is.',
     ],
     usedBy: 'Data engineers starting the build, and the business users who want to see how their questions will be answered.',
     why: 'Problems with the grain or missing dimensions show up in minutes with rows in front of you, instead of after the first load job.',
@@ -235,7 +237,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
 export const HELP_NEXT_STEPS: string[] = [
   'Build the conformed dimensions first: the columns with the most marks in the bus matrix.',
   'Pick the top process on the prioritisation grid and do its detailed design: every attribute, slowly changing dimension strategy and source-to-target mapping.',
-  'Try it in phase 11 *Prototype* first: query the sample data, check each must-have requirement can be answered, and start from the generated CREATE TABLE script.',
+  'Try it in phase 11 *Prototype* first: query the sample data, save the question that answers each must-have requirement, and start from the generated CREATE TABLE script.',
   'Build and release that one process end to end, then the next row of the matrix.',
   'Keep the project file in your repository and update it when scope changes, so the diagrams stay current.',
 ];
@@ -245,7 +247,7 @@ export const HELP_NOT_INCLUDED_LEAD = 'Kimball Designer covers the high-level de
 /** Honest scope: what the tool does not produce. */
 export const HELP_NOT_INCLUDED: string[] = [
   'A finished physical design: the CREATE TABLE script is a starting point to review, not production-ready DDL.',
-  'Source-to-target mappings and ETL or ELT code.',
+  'Source-to-target mappings and ETL or ELT code: the dbt project reads sample rows until you connect your own staging models.',
   'Data profiling or connections to your source systems.',
   'Dashboards or reports.',
 ];
@@ -310,8 +312,8 @@ export const HELP_PHASES: Record<PhaseId, HelpPhase> = {
     doneWhen: 'There are no errors or warnings.',
   },
   prototype: {
-    youDo: 'Explore the design as tables filled with sample data, then download the CREATE TABLE script, index advice and a Docker sandbox.',
-    youRecord: 'Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values.',
+    youDo: 'Explore the design as tables filled with sample data, save the question that answers each requirement, then download the CREATE TABLE script, index advice and a Docker sandbox.',
+    youRecord: 'The query that answers each requirement. Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values.',
     doneWhen: 'Every process has a grain, dimensions and facts, so it can be built as a table.',
   },
 };
@@ -609,7 +611,7 @@ export const HELP_CLI: HelpCommand[] = [
   { command: 'validate <file>', description: 'Check the model against the Kimball rules (`--json`, `--strict`).' },
   { command: 'render <file> --out <dir>', description: 'Write the requirements document, bus matrix and bubble diagrams.' },
   { command: 'ddl <file> --dialect postgres', description: 'Print the CREATE TABLE script with keys and index advice (postgres, sqlserver, snowflake).' },
-  { command: 'prototype <file> --out <dir>', description: 'Write the prototype bundle: Docker sandbox, scripts, sample data and index recommendations.' },
+  { command: 'prototype <file> --out <dir>', description: 'Write the prototype bundle: Docker sandbox, scripts, sample data, index recommendations and a dbt project.' },
   { command: 'guide [phase]', description: 'Coaching notes for a phase: why, what to ask, tips and pitfalls.' },
   { command: 'examples', description: 'List the example projects.' },
 ];
@@ -688,7 +690,7 @@ export const HELP_FAQ: HelpQuestion[] = [
   },
   {
     q: 'Does it generate SQL or table designs?',
-    a: 'Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data and a Docker sandbox. Review data types and keys in the detailed design before you build for real.',
+    a: 'Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data, a Docker sandbox and a dbt project with tests. Review data types and keys in the detailed design before you build for real.',
   },
   {
     q: 'How long does the process take?',

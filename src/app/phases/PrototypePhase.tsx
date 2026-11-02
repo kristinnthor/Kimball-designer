@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AGGREGATES,
   DATA_TYPES,
+  PRIORITIES,
   SAMPLE_ROWS_MAX,
   SQL_DIALECTS,
+  dbtProjectFiles,
   ddlScript,
   defaultQuery,
   defaultRows,
+  describeRequirementQuery,
   displayName,
   distinctValues,
   generateSampleData,
@@ -20,11 +23,13 @@ import {
   physicalModel,
   physicalSettings,
   prototypeFiles,
+  requirementAnswers,
   rowCount,
   runQuery,
   seedScript,
   slugify,
   sqlType,
+  toRequirementQuery,
   type Aggregate,
   type Cell,
   type DataType,
@@ -35,6 +40,7 @@ import {
   type PhysicalModel,
   type PhysicalSettings,
   type PhysicalTable,
+  type RequirementAnswer,
   type SampleDataset,
   type SqlDialect,
 } from '../../core';
@@ -43,9 +49,11 @@ import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState, SectionHead, Segmented, TagInput } from '../components/ui';
 import { copyWithToast, downloadBlob, downloadText } from '../lib/files';
 import { createZip } from '../lib/zip';
+import { removeWithUndo } from '../actions';
 import { goToPhase } from '../store/routing';
 import { update, useProject } from '../store/store';
 import { useSyncStatus } from '../store/sync';
+import { pushToast } from '../store/toasts';
 
 const ROLE_LABEL: Record<PhysicalColumn['role'], string> = {
   'surrogate-key': 'PK',
@@ -144,34 +152,65 @@ function GroupSelect({ label, value, options, onChange, allowNone }: { label: st
   );
 }
 
-function Explorer({ project, model, data, dialect }: { project: KimballProject; model: PhysicalModel; data: SampleDataset; dialect: SqlDialect }) {
-  const facts = model.tables.filter((t) => t.kind === 'fact' && t.columns.some((c) => c.role === 'foreign-key' || c.role === 'degenerate'));
-  const [draft, setDraft] = useState<ExploreQuery | null>(null);
+/** Fact tables with at least one dimension key: the ones the explorer can group. */
+const explorableFacts = (model: PhysicalModel) =>
+  model.tables.filter((t) => t.kind === 'fact' && t.columns.some((c) => c.role === 'foreign-key' || c.role === 'degenerate'));
+
+/** The explorer's question: the draft while it still fits the design, otherwise a sensible default. */
+function currentQuery(model: PhysicalModel, draft: ExploreQuery | null): ExploreQuery | null {
+  const facts = explorableFacts(model);
   const fact = facts.find((f) => f.name === draft?.fact) ?? facts[0];
-  if (!fact) {
-    return <p className="hint">Give a business process at least one dimension to explore it.</p>;
-  }
-  const options = groupOptions(model, fact);
-  const keys = new Set(options.map((o) => o.key));
+  if (!fact) return null;
+  const keys = new Set(groupOptions(model, fact).map((o) => o.key));
   const measures = fact.columns.filter((c) => c.role === 'measure');
-  // Fall back to a sensible question when the design changed under the current one.
   const valid =
     draft &&
     draft.fact === fact.name &&
     (draft.measure === null || measures.some((m) => m.name === draft.measure)) &&
     draft.groupBy.every((g) => keys.has(groupKey(g))) &&
     (!draft.filter || keys.has(groupKey(draft.filter.by)));
-  const query: ExploreQuery = valid ? draft : defaultQuery(model, fact);
+  return valid ? draft : defaultQuery(model, fact);
+}
+
+const EXPLORE_ID = 'prototype-explore';
+
+function Explorer({
+  project,
+  model,
+  data,
+  dialect,
+  query,
+  setDraft,
+}: {
+  project: KimballProject;
+  model: PhysicalModel;
+  data: SampleDataset;
+  dialect: SqlDialect;
+  query: ExploreQuery | null;
+  setDraft: (q: ExploreQuery) => void;
+}) {
+  const facts = explorableFacts(model);
+  const fact = facts.find((f) => f.name === query?.fact);
+  if (!fact || !query) {
+    return <p className="hint">Give a business process at least one dimension to explore it.</p>;
+  }
+  const options = groupOptions(model, fact);
+  const measures = fact.columns.filter((c) => c.role === 'measure');
   const set = (patch: Partial<ExploreQuery>) => setDraft({ ...query, ...patch });
   const result = runQuery(model, data, query, dialect);
   const max = Math.max(1, ...result.rows.map((r) => Math.abs(Number(r[r.length - 1]) || 0)));
   const filterValues = query.filter ? distinctValues(model, data, fact.name, query.filter.by) : [];
+  // A saved value may not occur in the made-up rows; show it rather than another value.
+  const missingValue = query.filter && !filterValues.includes(query.filter.value) ? query.filter.value : null;
   const process = project.processes.find((p) => p.id === fact.sourceId);
-  const linked = project.requirements.filter((r) => process && r.processIds.includes(process.id) && r.statement.trim());
+  const answers = requirementAnswers(project, model);
+  const linked = answers.filter((a) => process && a.requirement.processIds.includes(process.id) && a.requirement.statement.trim());
+  const answerNote = (a: RequirementAnswer) =>
+    a.status === 'outdated' ? ' (saved query no longer matches)' : a.status === 'answered' && a.query?.fact === fact.name ? ' (answered)' : '';
   const [first, second] = query.groupBy;
 
   return (
-    <div className="card stack">
+    <div className="card stack" id={EXPLORE_ID} tabIndex={-1}>
       <div className="explore-controls">
         <label className="field">
           <span className="field-label">Fact table</span>
@@ -242,6 +281,7 @@ function Explorer({ project, model, data, dialect }: { project: KimballProject; 
           <label className="field">
             <span className="field-label">equals</span>
             <select className="select" value={query.filter.value} onChange={(e) => set({ filter: { ...query.filter!, value: e.target.value } })}>
+              {missingValue !== null && <option value={missingValue}>{missingValue} (not in the sample data)</option>}
               {filterValues.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -254,7 +294,8 @@ function Explorer({ project, model, data, dialect }: { project: KimballProject; 
 
       {linked.length > 0 && (
         <p className="hint">
-          Questions this process should answer: {linked.map((r) => `“${r.statement.trim()}”`).join(' · ')}
+          Questions this process should answer:{' '}
+          {linked.map((a) => `${a.label} “${a.requirement.statement.trim()}”${answerNote(a)}`).join(' · ')}
         </p>
       )}
       {result.warning && <div className="callout warning">{result.warning}</div>}
@@ -306,6 +347,159 @@ function Explorer({ project, model, data, dialect }: { project: KimballProject; 
         <button type="button" className="btn sm ghost" onClick={() => void copy(result.sql, 'SQL')}>
           <IconCopy /> Copy SQL
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Requirements ───
+
+const PRIORITY_ORDER = PRIORITIES.map((p) => p.value);
+
+function RequirementCoverage({
+  project,
+  model,
+  current,
+  onShow,
+}: {
+  project: KimballProject;
+  model: PhysicalModel;
+  current: ExploreQuery | null;
+  onShow: (q: ExploreQuery) => void;
+}) {
+  // Saving or removing replaces the clicked button, so focus moves to the row's first
+  // remaining button (or the row) instead of falling back to the page.
+  const table = useRef<HTMLTableElement>(null);
+  const [refocus, setRefocus] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!refocus) return;
+    const row = table.current?.querySelector<HTMLElement>(`tr[data-id="${refocus}"]`);
+    (row?.querySelector<HTMLElement>('button:not(:disabled)') ?? row)?.focus();
+    setRefocus(null);
+  }, [refocus]);
+  const answers = requirementAnswers(project, model)
+    .filter((a) => a.requirement.statement.trim() && a.requirement.priority !== 'wont')
+    .sort((a, b) => PRIORITY_ORDER.indexOf(a.requirement.priority) - PRIORITY_ORDER.indexOf(b.requirement.priority));
+  if (answers.length === 0) {
+    return (
+      <p className="hint">
+        No requirements to check yet. Add them in phase 3 <em>Requirements</em>, then save the question that answers each one.
+      </p>
+    );
+  }
+  const saved = current ? toRequirementQuery(model, current) : null;
+  const savedText = saved ? describeRequirementQuery(project, saved) : null;
+  const must = answers.filter((a) => a.requirement.priority === 'must');
+  const isCurrent = (a: RequirementAnswer) => !!saved && JSON.stringify(saved) === JSON.stringify(a.requirement.query);
+  const save = (a: RequirementAnswer) => {
+    if (!saved) return;
+    const process = project.processes.find((p) => p.id === saved.processId);
+    const linked = a.requirement.processIds.includes(saved.processId);
+    update((d) => {
+      const r = d.requirements.find((x) => x.id === a.requirement.id);
+      if (!r) return;
+      r.query = saved;
+      if (!r.processIds.includes(saved.processId)) r.processIds.push(saved.processId);
+    });
+    setRefocus(a.requirement.id);
+    pushToast(
+      `${a.label} is answered by the question above.${linked || !process ? '' : ` It is now also linked to ${displayName(process)}.`}`,
+      'success',
+    );
+  };
+  const remove = (a: RequirementAnswer) => {
+    removeWithUndo(`the answer to ${a.label}`, (d) => {
+      const r = d.requirements.find((x) => x.id === a.requirement.id);
+      if (r) delete r.query;
+    });
+    setRefocus(a.requirement.id);
+  };
+
+  return (
+    <div className="card stack">
+      <p>
+        <strong>
+          {must.filter((a) => a.status === 'answered').length} of {must.length} must-have requirements
+        </strong>{' '}
+        are answered by a query{answers.length > must.length ? `, and ${answers.filter((a) => a.status === 'answered' && a.requirement.priority !== 'must').length} of ${answers.length - must.length} others` : ''}.
+        {answers.some((a) => a.status === 'outdated') && ' Some saved queries no longer match the design: save them again.'}
+      </p>
+      <p className="hint">
+        {savedText ? (
+          <>
+            The question above: <strong>{savedText}</strong>
+          </>
+        ) : (
+          'Build a question in the explorer above, then save it for the requirement it answers.'
+        )}
+      </p>
+      <div className="table-wrap">
+        <table className="data coverage" ref={table}>
+          <thead>
+            <tr>
+              <th style={{ width: 48 }}>#</th>
+              <th style={{ width: 90 }}>Priority</th>
+              <th>Requirement</th>
+              <th>Answered by</th>
+              <th style={{ width: 1 }}>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {answers.map((a) => (
+              <tr key={a.requirement.id} data-id={a.requirement.id} tabIndex={-1}>
+                <td>{a.label}</td>
+                <td>
+                  <span className={`badge ${a.requirement.priority === 'must' ? 'fact' : ''}`}>{PRIORITIES.find((p) => p.value === a.requirement.priority)!.label}</span>
+                </td>
+                <td>{a.requirement.statement.trim()}</td>
+                <td>
+                  {a.status === 'unanswered' ? (
+                    <span className="hint">Not answered yet</span>
+                  ) : (
+                    <>
+                      {a.description}
+                      {a.status === 'outdated' && (
+                        <>
+                          {' '}
+                          <span className="badge warning">No longer matches the design</span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </td>
+                <td>
+                  <div className="row coverage-actions">
+                    {a.query && (
+                      <button type="button" className="btn sm" aria-label={`Show the query for ${a.label}`} onClick={() => onShow(a.query!)}>
+                        Show
+                      </button>
+                    )}
+                    {isCurrent(a) ? (
+                      <span className="hint">Shown above</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn sm"
+                        disabled={!saved}
+                        aria-label={a.status === 'unanswered' ? `Use the question above for ${a.label}` : `Replace the answer to ${a.label} with the question above`}
+                        onClick={() => save(a)}
+                      >
+                        {a.status === 'unanswered' ? 'Use the question above' : 'Replace'}
+                      </button>
+                    )}
+                    {a.status !== 'unanswered' && (
+                      <button type="button" className="btn sm ghost" aria-label={`Remove the answer to ${a.label}`} onClick={() => remove(a)}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -532,10 +726,10 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
   const adviceGroups = groupAdvice(indexAdvice(model, settings.dialect)).filter((g) => g.when !== 'table');
   const seedPreview = view === 'seed' ? seedScript(project, data, settings.dialect, model) : '';
   const dialectLabel = SQL_DIALECTS.find((d) => d.value === settings.dialect)!.label;
-  const sandbox = () => {
-    const files = prototypeFiles(project, settings).map((f) => ({ name: `${base}-prototype/${f.name}`, data: f.data }));
-    downloadBlob(`${base}-prototype.zip`, new Blob([createZip(files) as BlobPart], { type: 'application/zip' }));
-  };
+  const zip = (name: string, files: { name: string; data: string }[]) =>
+    downloadBlob(`${name}.zip`, new Blob([createZip(files.map((f) => ({ name: `${name}/${f.name}`, data: f.data }))) as BlobPart], { type: 'application/zip' }));
+  const sandbox = () => zip(`${base}-prototype`, prototypeFiles(project, settings));
+  const dbt = () => zip(`${base}-dbt`, dbtProjectFiles(project, settings, model, data));
   return (
     <>
       <div className="row" style={{ marginBottom: 12 }}>
@@ -588,6 +782,9 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
         <button type="button" className="btn fact" onClick={sandbox}>
           <IconDownload /> Docker sandbox (.zip)
         </button>
+        <button type="button" className="btn" onClick={dbt}>
+          <IconDownload /> dbt project (.zip)
+        </button>
         <button type="button" className="btn" onClick={() => downloadText(`${base}-schema.${settings.dialect}.sql`, ddl, 'application/sql')}>
           <IconDownload /> CREATE TABLE (.sql)
         </button>
@@ -605,6 +802,17 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
         The sandbox runs PostgreSQL in Docker with these tables and rows: unzip it and run <code>docker compose up -d</code>, then connect to{' '}
         <code>127.0.0.1:5433</code> (database and user <code>kimball</code>). It also contains the script for {dialectLabel}, the index advice and CSV files.
       </p>
+      <p className="hint">
+        The dbt project has a model per table with descriptions and tests from the design, and the sample rows as seeds.{' '}
+        {settings.dialect === 'postgres' ? (
+          <>
+            <code>dbt seed</code>, <code>dbt run</code> and <code>dbt test</code> work against the sandbox as they are.
+          </>
+        ) : (
+          <>Its profile reads the {dialectLabel} connection from environment variables; choose PostgreSQL to run it against the sandbox.</>
+        )}{' '}
+        Its README explains how to swap the seeds for your staging models.
+      </p>
     </>
   );
 }
@@ -617,6 +825,15 @@ export function PrototypePhase() {
   const settings = useMemo(() => physicalSettings(project), [project]);
   const model = useMemo(() => physicalModel(project), [project]);
   const data = useMemo(() => generateSampleData(project, model, settings), [project, model, settings]);
+  const [draft, setDraft] = useState<ExploreQuery | null>(null);
+  const query = currentQuery(model, draft);
+  const show = (q: ExploreQuery) => {
+    setDraft(q);
+    const explorer = document.getElementById(EXPLORE_ID);
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    explorer?.scrollIntoView?.({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    explorer?.focus({ preventScroll: true });
+  };
   const notReady = project.processes.filter((p) => !isReadyToBuild(p));
   const file = sync.mode === 'server' ? (sync.fileName ?? 'the project file') : 'kimball/project.kimball.json';
   const prompt = `Use the kimball-designer skill on ${file}: suggest realistic sample values, data types and business keys for the dimension attributes (ask me before you record them), then run "kimball prototype" and start the Docker sandbox so we can query the design.`;
@@ -663,7 +880,15 @@ export function PrototypePhase() {
 
           <section className="section">
             <SectionHead title="Explore">Group the facts by any attribute. Does the design answer the questions people asked?</SectionHead>
-            <Explorer project={project} model={model} data={data} dialect={settings.dialect} />
+            <Explorer project={project} model={model} data={data} dialect={settings.dialect} query={query} setDraft={setDraft} />
+          </section>
+
+          <section className="section">
+            <SectionHead title="Requirements">
+              Save the question that answers each requirement. The requirements document shows it, and the sandbox's queries.sql gets the
+              SQL.
+            </SectionHead>
+            <RequirementCoverage project={project} model={model} current={query} onShow={show} />
           </section>
 
           <section className="section">

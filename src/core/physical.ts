@@ -33,7 +33,8 @@ export type ColumnRole =
 export type ColumnSource =
   | { kind: 'attribute'; attribute: DimensionAttribute }
   | { kind: 'measure'; measure: Measure }
-  | { kind: 'date-part'; part: DatePart }
+  /** A calendar column; `attributeId` when it comes from an attribute in the design. */
+  | { kind: 'date-part'; part: DatePart; attributeId?: Id }
   | { kind: 'usage'; dimensionId: Id; role: string | null }
   | { kind: 'degenerate'; dimensionId: Id }
   | { kind: 'generated'; purpose: 'name' | 'business-key' | 'effective-from' | 'effective-to' | 'current' | 'prior' | 'full-date' };
@@ -344,7 +345,7 @@ function dimensionTable(dim: Dimension, tableName: string): PhysicalTable {
       dataType,
       size: dataType === 'text' ? TEXT(part ? 20 : 100) : dataType === 'decimal' ? { precision: 18, scale: 4 } : undefined,
       nullable: !part,
-      source: part && !a.sampleValues?.length ? { kind: 'date-part', part: part.part } : { kind: 'attribute', attribute: a },
+      source: part && !a.sampleValues?.length ? { kind: 'date-part', part: part.part, attributeId: a.id } : { kind: 'attribute', attribute: a },
       note:
         [a.description.trim(), a.scdType != null && !calendar ? `SCD type ${a.scdType}` : ''].filter(Boolean).join(' · ') ||
         (part ? 'Calendar attribute' : ''),
@@ -490,6 +491,13 @@ export function physicalModel(project: KimballProject): PhysicalModel {
 
   if (project.processes.length === 0) notes.push('Add business processes to get fact tables.');
   return { tables, notes };
+}
+
+/** The design attribute a column was made from, if any. */
+export function attributeIdOf(column: PhysicalColumn): Id | undefined {
+  if (column.source.kind === 'attribute') return column.source.attribute.id;
+  if (column.source.kind === 'date-part') return column.source.attributeId;
+  return undefined;
 }
 
 export function factTables(model: PhysicalModel): PhysicalTable[] {

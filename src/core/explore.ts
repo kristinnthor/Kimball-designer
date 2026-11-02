@@ -1,4 +1,4 @@
-import type { Additivity, SqlDialect } from './model';
+import type { Additivity, Aggregate, SqlDialect } from './model';
 import type { PhysicalColumn, PhysicalModel, PhysicalTable } from './physical';
 import { sqlLiteral, type Cell, type SampleDataset } from './sampledata';
 
@@ -7,8 +7,6 @@ import { sqlLiteral, type Cell, type SampleDataset } from './sampledata';
  * measure and up to two dimension attributes to group by, and see the result
  * plus the SQL that would compute it in the warehouse.
  */
-
-export type Aggregate = 'sum' | 'avg' | 'min' | 'max' | 'count';
 
 export const AGGREGATES: { value: Aggregate; label: string }[] = [
   { value: 'sum', label: 'Sum' },
@@ -149,8 +147,13 @@ function aliasFor(column: string, used: Set<string>): string {
   return alias;
 }
 
-/** The SQL that computes the query in the warehouse. */
-export function querySql(model: PhysicalModel, query: ExploreQuery, dialect: SqlDialect): string {
+/** The SQL that computes the query in the warehouse; `tableName` can write each table differently, e.g. as a dbt ref(). */
+export function querySql(
+  model: PhysicalModel,
+  query: ExploreQuery,
+  dialect: SqlDialect,
+  tableName: (table: string) => string = (t) => t,
+): string {
   const fact = model.tables.find((t) => t.name === query.fact);
   if (!fact) return '';
   const used = new Set<string>(['f']);
@@ -176,8 +179,8 @@ export function querySql(model: PhysicalModel, query: ExploreQuery, dialect: Sql
   }
   const limit = query.limit ?? 20;
   const select = [...groups, `${value} AS ${valueAlias}`];
-  const lines = [`SELECT${dialect === 'sqlserver' ? ` TOP (${limit})` : ''}`, `  ${select.join(',\n  ')}`, `FROM ${fact.name} AS f`];
-  for (const j of joins.values()) lines.push(`JOIN ${j.dim.name} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
+  const lines = [`SELECT${dialect === 'sqlserver' ? ` TOP (${limit})` : ''}`, `  ${select.join(',\n  ')}`, `FROM ${tableName(fact.name)} AS f`];
+  for (const j of joins.values()) lines.push(`JOIN ${tableName(j.dim.name)} AS ${j.alias} ON ${j.alias}.${j.dim.keyColumn} = f.${j.fk.name}`);
   if (filter) lines.push(`WHERE ${filter}`);
   if (groups.length) lines.push(`GROUP BY ${groups.join(', ')}`);
   lines.push(`ORDER BY ${valueAlias} DESC`);

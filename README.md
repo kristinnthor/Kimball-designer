@@ -45,7 +45,7 @@ Kimball Designer turns that process into a guided experience — in Claude, in y
 - **Guided UI** — a phase-by-phase wizard with a coach panel, live bubble diagrams and an interactive bus matrix. Runs fully offline from a single HTML file, or online at [kimball.kristinn.eu](https://kimball.kristinn.eu).
 - **Live sync** — `kimball serve` opens the UI on the *same* project file Claude edits, so you can talk to Claude and watch the diagrams update, or click in the UI and let Claude pick up your changes.
 - **Deliverables** — requirements document (Markdown), bus matrix (Markdown / CSV / HTML), bubble diagrams (SVG / PNG / Mermaid) and the project JSON.
-- **Prototype** — the design as a star schema filled with sample data you can query in the browser, a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake with index recommendations, and a Docker sandbox. Claude can make the sample data look like your business.
+- **Prototype** — the design as a star schema filled with sample data you can query in the browser, a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake with index recommendations, a Docker sandbox and a dbt project with tests. Save the question that answers each requirement, so the requirements document shows how. Claude can make the sample data look like your business.
 - **Help and demos** — a built-in Help page (the **?** button) with guided demos, a guide to every deliverable, a glossary and an FAQ.
 
 ## What you get
@@ -89,7 +89,7 @@ Then ask Claude something like *"Help me gather requirements for a sales data wa
 
 1. Finds or creates `kimball/project.kimball.json` and offers to open the guided UI with live sync.
 2. Coaches you phase by phase, asking at most three questions at a time and recording your answers. It never makes up business facts; unknowns become open questions.
-3. Validates the model against 16 Kimball rules (`kimball validate`).
+3. Validates the model against 18 Kimball rules (`kimball validate`).
 4. Renders the deliverables (`kimball render`) and hands off: the bus matrix, the conformed dimensions, which process to build first, and the blocking questions.
 
 **Use the CLI directly** (Node ≥ 18, no install needed):
@@ -101,7 +101,7 @@ node plugin/skills/kimball-designer/scripts/kimball.mjs render kimball/project.k
 node plugin/skills/kimball-designer/scripts/kimball.mjs prototype kimball/project.kimball.json --out kimball/prototype
 ```
 
-The last command writes a PostgreSQL sandbox: run `docker compose up -d` in `kimball/prototype` to query the star schema with sample data.
+The last command writes a PostgreSQL sandbox: run `docker compose up -d` in `kimball/prototype` to query the star schema with sample data. The `dbt/` folder in it is a dbt project with the same tables: `dbt seed && dbt run && dbt test`.
 
 ## Repository layout
 

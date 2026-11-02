@@ -7,6 +7,7 @@ import {
   SCHEMA_VERSION,
   newId,
   type Additivity,
+  type Aggregate,
   type Assumption,
   type BusinessProcess,
   type DataType,
@@ -22,7 +23,9 @@ import {
   type PhaseId,
   type PhysicalSettings,
   type Priority,
+  type QueryColumn,
   type Requirement,
+  type RequirementQuery,
   type ScdType,
   type SqlDialect,
   type Stakeholder,
@@ -72,6 +75,9 @@ const ADDITIVITY = ['additive', 'semi-additive', 'non-additive'] as const satisf
 const DIM_KINDS = ['standard', 'date', 'degenerate', 'junk'] as const satisfies readonly DimensionKind[];
 const DATA_TYPES = ['text', 'integer', 'decimal', 'date', 'boolean'] as const satisfies readonly DataType[];
 const DIALECTS = ['postgres', 'sqlserver', 'snowflake'] as const satisfies readonly SqlDialect[];
+const AGGREGATES = ['sum', 'avg', 'min', 'max', 'count'] as const satisfies readonly Aggregate[];
+/** The explorer groups by at most two columns. */
+const QUERY_GROUPS_MAX = 2;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const isoDate = (v: unknown): string | null => {
@@ -127,8 +133,47 @@ function normalizeStakeholder(o: Obj): Stakeholder {
   };
 }
 
+function queryColumn(v: unknown): QueryColumn | null {
+  if (!isObj(v) || !safeId(v.dimensionId)) return null;
+  const out: QueryColumn = { dimensionId: safeId(v.dimensionId) };
+  const role = str(v.role).trim();
+  if (role) out.role = role;
+  if (safeId(v.attributeId)) out.attributeId = safeId(v.attributeId);
+  else if (str(v.column).trim()) out.column = str(v.column).trim();
+  return out;
+}
+
+/**
+ * A saved query, kept even when it no longer matches the design (validation reports that).
+ * A malformed one is dropped instead of being read as a different question: an unknown
+ * aggregate, a sum without a fact, a column without a dimension, more than two groups.
+ */
+function normalizeQuery(v: unknown): RequirementQuery | undefined {
+  if (!isObj(v) || !safeId(v.processId)) return undefined;
+  const measureId = safeId(v.measureId);
+  if (v.aggregate != null && !AGGREGATES.includes(v.aggregate as Aggregate)) return undefined;
+  const aggregate = (v.aggregate as Aggregate | undefined) ?? (measureId ? 'sum' : 'count');
+  if (aggregate !== 'count' && !measureId) return undefined;
+  const groups = v.groupBy ?? [];
+  if (!Array.isArray(groups) || groups.length > QUERY_GROUPS_MAX) return undefined;
+  const groupBy = groups.map(queryColumn);
+  if (groupBy.some((c) => c === null)) return undefined;
+  const query: RequirementQuery = {
+    processId: safeId(v.processId),
+    ...(aggregate !== 'count' ? { measureId } : {}),
+    aggregate,
+    groupBy: groupBy as QueryColumn[],
+  };
+  if (v.filter != null) {
+    const column = isObj(v.filter) ? queryColumn(v.filter.column) : null;
+    if (!column || !isObj(v.filter)) return undefined;
+    query.filter = { column, value: str(v.filter.value) };
+  }
+  return query;
+}
+
 function normalizeRequirement(o: Obj): Requirement {
-  return {
+  const requirement: Requirement = {
     id: id(o.id, ID_PREFIX.requirement),
     statement: str(o.statement),
     kpis: strList(o.kpis),
@@ -137,6 +182,9 @@ function normalizeRequirement(o: Obj): Requirement {
     processIds: idList(o.processIds),
     notes: str(o.notes),
   };
+  const query = normalizeQuery(o.query);
+  if (query) requirement.query = query;
+  return requirement;
 }
 
 function normalizeMeasure(o: Obj): Measure {

@@ -55,7 +55,7 @@ CLI commands: `init`, `summary`, `validate`, `render`, `ddl`, `prototype`, `serv
 | 8 | `bubbles` | Review one bubble diagram per process | (derived) |
 | 9 | `matrix` | Review the bus matrix; agree conformed dimensions | (derived) |
 | 10 | `review` | Resolve findings; export | — |
-| 11 | `prototype` | Optional: try the design on sample data; get DDL and index advice | `attributes[].sampleValues`, `businessKey`, `dataType`; `facts[].sampleRange`; `physical` |
+| 11 | `prototype` | Optional: try the design on sample data; get DDL and index advice | `requirements[].query`; `attributes[].sampleValues`, `businessKey`, `dataType`; `facts[].sampleRange`; `physical` |
 
 For **each phase**:
 
@@ -89,9 +89,10 @@ Offer it once the hand-off is done: *"Want to see the design with data? I can tu
 
 1. Set `meta.currentPhase` to `prototype` and ask which database platform they target (PostgreSQL, SQL Server or Snowflake).
 2. Suggest business keys, data types and 5–15 **realistic sample values** per descriptive attribute for their domain. They are example data, so you may propose them, but label them as suggestions and record them only after the user agrees.
-3. Run `$KD prototype <file> --out kimball/prototype --dialect <dialect>` (or `$KD ddl <file> --dialect <dialect>` for just the script).
-4. If Docker is installed and the user agrees, start the sandbox (`docker compose up -d` in that folder) and answer two or three must-have requirements with SQL against it.
-5. Hand over `schema.sql`, the most important index recommendations and what to review before the real build.
+3. For each must-have requirement, propose the query that answers it (process, measure and aggregate, up to two attributes to group by) and record it as `requirements[].query` once the user agrees. A must-have no query can answer is a design gap: say what is missing.
+4. Run `$KD prototype <file> --out kimball/prototype --dialect <dialect>` (or `$KD ddl <file> --dialect <dialect>` for just the script). `queries.sql` starts with the SQL for the answered requirements.
+5. If Docker is installed and the user agrees, start the sandbox (`docker compose up -d` in that folder) and run those queries against it.
+6. Hand over `schema.sql`, the most important index recommendations and what to review before the real build. If the team uses dbt, point them to the `dbt/` project in the bundle (models, tests and sample seeds).
 
 ## Rules
 

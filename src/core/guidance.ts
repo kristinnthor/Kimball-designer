@@ -215,9 +215,11 @@ export const GUIDANCE: Record<PhaseId, PhaseGuidance> = {
       'Which database platform will the warehouse run on?',
     ],
     tips: [
+      "Save the question that answers each requirement. A must-have you can't answer points to a missing dimension, attribute or fact.",
       'Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.',
       'Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.',
       'Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.',
+      'Building with dbt? The dbt project has a model per table, the tests and the sample rows as seeds. With PostgreSQL, dbt seed, dbt run and dbt test work against the sandbox as they are.',
       'Treat the script as a starting point: review data types, text lengths and business keys before you build.',
     ],
     pitfalls: [

@@ -125,9 +125,11 @@ describe('kimball CLI', () => {
     expect(await run('prototype', 'models/r.kimball.json', '--rows', '50', '--seed', '7', '--dialect', 'snowflake')).toBe(0);
     const out = join(dir, 'models', 'prototype');
     expect(readdirSync(out).sort()).toEqual(
-      ['README.md', 'data', 'data.snowflake.sql', 'docker-compose.yml', 'index-recommendations.md', 'initdb', 'queries.sql', 'schema.sql'].sort(),
+      ['README.md', 'data', 'data.snowflake.sql', 'dbt', 'docker-compose.yml', 'index-recommendations.md', 'initdb', 'queries.sql', 'schema.sql'].sort(),
     );
     expect(readdirSync(join(out, 'initdb'))).toEqual(['01-schema.sql', '02-data.sql']);
+    expect(readFileSync(join(out, 'dbt', 'profiles.yml'), 'utf8')).toContain('type: snowflake');
+    expect(readFileSync(join(out, 'dbt', 'seeds', 'sample_fact_subscription_changes.csv'), 'utf8').trim().split('\r\n')).toHaveLength(51);
     expect(readFileSync(join(out, 'schema.sql'), 'utf8')).toContain('Snowflake');
     expect(readFileSync(join(out, 'initdb', '02-data.sql'), 'utf8')).toContain('Seed 7');
     const facts = readFileSync(join(out, 'data', 'fact_subscription_changes.csv'), 'utf8').trim().split('\r\n');

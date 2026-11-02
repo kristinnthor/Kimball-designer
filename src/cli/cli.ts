@@ -68,7 +68,7 @@ Commands
       --dialect <name>   postgres (default), sqlserver or snowflake
       --out <file>       Write to a file instead
       --drop             Start with DROP TABLE IF EXISTS
-  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV
+  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV, dbt
       --out <dir>        Output folder (default: <file folder>/prototype)
       --dialect <name>   Target platform for schema.sql
       --seed <n>         Seed for the sample data
@@ -243,7 +243,7 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
         for (const f of files) await writeFileAtomic(join(outDir, f.name), f.data);
         io.out(`Wrote the prototype (${files.length} files) to ${rel(outDir)}.\n`);
         io.out(`Start the PostgreSQL sandbox (needs Docker):\n  cd ${rel(outDir)}\n  docker compose up -d\n  docker compose exec db psql -U kimball -d kimball\n`);
-        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect)!.label}; index advice is in index-recommendations.md.\n`);
+        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect)!.label}; index advice is in index-recommendations.md; dbt/ is a dbt project (see dbt/README.md).\n`);
         return 0;
       }
 
