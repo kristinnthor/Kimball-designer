@@ -85,15 +85,16 @@ Scale: 12 / 14 / 16 / 20 / 26 / 34 px. Headings use tight letter-spacing (−0.0
 - Elevation is subtle: one hairline border + `--kd-shadow-1`. Avoid heavy shadows.
 - Bubbles are always **circles**; process bubbles are larger than dimension bubbles.
 
-## 6. The three stages
+## 6. The four stages
 
-The user journey is branded as three stages. Use these names and colours consistently in UI, docs and the skill.
+The user journey is branded as four stages. Use these names and colours consistently in UI, docs and the skill.
 
 | Stage | Colour | Phases |
 |---|---|---|
 | **Discover** | Fact teal | Kickoff · Stakeholders · Requirements |
 | **Model** | Dimension indigo | Business processes · Grain · Dimensions · Facts |
 | **Deliver** | Conformed amber | Bubble diagrams · Bus matrix · Review & export |
+| **Build** | Ink | Prototype |
 
 ## 7. Voice and tone
 

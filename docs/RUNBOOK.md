@@ -21,7 +21,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
-> **Current status (2026-11-02):** M0–M3, M5 and M6 are done. M6 (owner requests) adds phase 11 *Prototype*: sample data to explore, CREATE TABLE scripts with index advice, and a Docker sandbox (#52, #53); plus readable open questions (#49), varied example text (#50), stakeholders as owners (#51) and fixes from a full product review (#54). The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
+> **Current status (2026-11-02):** M0–M3, M5 and M6 are done. M6 (owner requests) adds phase 11 *Prototype*: sample data to explore, CREATE TABLE scripts with index advice, a Docker sandbox (#52, #53), requirement traceability (#58) and a dbt project (#60); plus readable open questions (#49), varied example text (#50), stakeholders as owners (#51) and fixes from a full product review (#54). The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu). The v1.0.0 release notes are up to date (#62). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
 
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
@@ -132,6 +132,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-02 | v1.0.0 release notes refreshed: eleven phases in four stages, 18 rules, the Prototype phase (CREATE TABLE scripts, sandbox, dbt project, requirement answers) and the hosted UI; the brand guide lists the *Build* stage (#36) | [#62](https://github.com/kristinnthor/Kimball-designer/pull/62) |
 | 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | [#61](https://github.com/kristinnthor/Kimball-designer/pull/61) |
 | 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | [#59](https://github.com/kristinnthor/Kimball-designer/pull/59) |
 | 2026-11-02 | UI polish from the review: keyboard-operable bubbles, legend layout, phone layout (header, stepper, no sideways scroll), coach Escape, priority grid labels, quieter save announcements, labelled chip groups (#56) | [#57](https://github.com/kristinnthor/Kimball-designer/pull/57) |
