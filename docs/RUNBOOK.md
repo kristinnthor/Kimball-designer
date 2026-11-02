@@ -21,7 +21,7 @@ How Kimball Designer is being built, how to monitor it, and what to do when some
 
 ## 2. Status board
 
-> **Current status (2026-11-02):** M0–M3, M5 and M6 are done. M6 (owner requests) adds phase 11 *Prototype*: sample data to explore, CREATE TABLE scripts with index advice, a Docker sandbox (#52, #53), requirement traceability (#58) and a dbt project (#60); plus readable open questions (#49), varied example text (#50), stakeholders as owners (#51) and fixes from a full product review (#54). The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu). The v1.0.0 release notes are up to date (#62). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**; see § 5.
+> **Current status (2026-11-02):** M0–M3, M5 and M6 are done. M6 (owner requests) adds phase 11 *Prototype*: sample data to explore, CREATE TABLE scripts with index advice, a Docker sandbox (#52, #53), requirement traceability (#58) and a dbt project (#60); plus readable open questions (#49), varied example text (#50), stakeholders as owners (#51) and fixes from a full product review (#54). The hosted UI is live at [kimball.kristinn.eu](https://kimball.kristinn.eu). The v1.0.0 release notes are up to date (#62). The last open item, #36 (tag v1.0.0 after a live install test), is **your decision**: the version bump is ready in draft PR #66; see § 5.
 
 Updated with every merged PR. Legend: ✅ done · 🔄 in progress · ⏳ not started · ⛔ blocked · 🙋 needs owner
 
@@ -109,7 +109,7 @@ bash scripts/check-prototype.sh retail  # an example's bundle for real: Docker s
 | D2 | **Brand approval** — name, logo, palette in [`brand/BRAND.md`](../brand/BRAND.md) | Approve as is | Keep as is |
 | D3 | ✅ **Hosted UI on GitHub Pages** (#35). Decided 2026-11-01: live at [kimball.kristinn.eu](https://kimball.kristinn.eu); Pages source is *GitHub Actions* and `DEPLOY_PAGES=true` | — | — |
 | D4 | ✅ **Social preview image**. Uploaded by the owner on 2026-11-01 | — | — |
-| D6 | **Cut v1.0.0** (#36) — first do a live install test (`/plugin marketplace add kristinnthor/Kimball-designer`, then ask Claude to start a project), then run `node scripts/bump-version.mjs 1.0.0`, `npm run build:skill`, commit, `git tag v1.0.0`, `git push --follow-tags`. The release workflow publishes the zip. | Release after your smoke test | Stays at 0.1.0 |
+| D6 | **Cut v1.0.0** (#36) — first do a live install test (`/plugin marketplace add kristinnthor/Kimball-designer`, then ask Claude to start a project), then mark draft PR [#66](https://github.com/kristinnthor/Kimball-designer/pull/66) ready and merge it (version 1.0.0, the bundles and the dated CHANGELOG section), then on `main`: `git tag v1.0.0 && git push origin v1.0.0`. The release workflow publishes the zip; its dry run on #66 built a zip whose CLI reports 1.0.0. | Release after your smoke test | Stays at 0.1.0 |
 | D5 | **Branch protection on `main`** (require CI + PR) — needs admin; would stop the agent from merging if reviews are required | Require CI only, not reviews, until v1.0 | Unprotected |
 
 ## 6. Troubleshooting
@@ -133,6 +133,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
+| 2026-11-02 | v1.0.0 version bump (#36): package, plugin and marketplace manifests, bundles, CHANGELOG `[1.0.0]`; ready for the owner's install test and tag | [#66](https://github.com/kristinnthor/Kimball-designer/pull/66) |
 | 2026-11-02 | Real dbt and the Docker sandbox in CI: every example's bundle runs `docker compose`, `queries.sql`, `dbt seed`/`run`/`test` and the analyses on dbt 1.10.8 and the newest (#63); generated names within 63 characters and one key per repeated dimension use (#64) | [#65](https://github.com/kristinnthor/Kimball-designer/pull/65) |
 | 2026-11-02 | v1.0.0 release notes refreshed: eleven phases in four stages, 18 rules, the Prototype phase (CREATE TABLE scripts, sandbox, dbt project, requirement answers) and the hosted UI; the brand guide lists the *Build* stage (#36) | [#62](https://github.com/kristinnthor/Kimball-designer/pull/62) |
 | 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | [#61](https://github.com/kristinnthor/Kimball-designer/pull/61) |

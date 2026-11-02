@@ -1,6 +1,6 @@
 {
   "name": "kimball-designer",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "From first interview to bus matrix — a Claude skill + guided UI for Kimball requirements gathering, bubble diagrams and enterprise bus matrices.",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "kimball-designer",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Guides Kimball requirements gathering — business processes, grain, conformed dimensions, facts — and produces bubble diagrams and an enterprise bus matrix, with a live-synced guided web UI.",
   "author": {
     "name": "kristinnthor"
@@ -8,5 +8,12 @@
   "homepage": "https://github.com/kristinnthor/Kimball-designer",
   "repository": "https://github.com/kristinnthor/Kimball-designer",
   "license": "MIT",
-  "keywords": ["kimball", "dimensional-modeling", "data-warehouse", "bus-matrix", "bubble-diagram", "star-schema"]
+  "keywords": [
+    "kimball",
+    "dimensional-modeling",
+    "data-warehouse",
+    "bus-matrix",
+    "bubble-diagram",
+    "star-schema"
+  ]
 }
