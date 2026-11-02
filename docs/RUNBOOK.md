@@ -132,7 +132,7 @@ Newest first. Every merged PR adds a line.
 
 | When (UTC) | What | Link |
 |---|---|---|
-| 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | _this PR_ |
+| 2026-11-02 | dbt project in the prototype bundle and as a download: models, `_models.yml` tests and docs, seeds, profile, requirement analyses; PGlite runs every model and test (#60) | [#61](https://github.com/kristinnthor/Kimball-designer/pull/61) |
 | 2026-11-02 | Requirement traceability: save the prototype query that answers each requirement; coverage list, *Answered by* in the requirements document, requirement SQL in `queries.sql`, rules KD109/KD206, skill guidance (#58) | [#59](https://github.com/kristinnthor/Kimball-designer/pull/59) |
 | 2026-11-02 | UI polish from the review: keyboard-operable bubbles, legend layout, phone layout (header, stepper, no sideways scroll), coach Escape, priority grid labels, quieter save announcements, labelled chip groups (#56) | [#57](https://github.com/kristinnthor/Kimball-designer/pull/57) |
 | 2026-11-02 | Prototype & review (owner request): phase 11 *Prototype* with sample data, explorer, CREATE TABLE scripts for PostgreSQL/SQL Server/Snowflake with index advice, Docker sandbox, `kimball ddl`/`prototype`; readable open questions, varied examples, stakeholders as owners; fixes from a full review of core, CLI and UI (#49–#54) | [#55](https://github.com/kristinnthor/Kimball-designer/pull/55) |
