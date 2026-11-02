@@ -1811,3 +1811,7 @@ table.data.advice td {
   color: var(--kd-warning);
   background: var(--kd-warning-soft);
 }
+
+.combo-list li > span:first-child {
+  white-space: nowrap;
+}
