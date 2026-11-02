@@ -101,7 +101,7 @@
     },
     "requirementQuery": {
       "type": "object",
-      "description": "The prototype question that answers the requirement, in design terms (ids and role names) so it survives renames.",
+      "description": "The prototype question that answers the requirement, in design terms (ids and role names), so renaming a process, fact, dimension or attribute keeps it.",
       "required": ["processId", "aggregate", "groupBy"],
       "properties": {
         "processId": { "$ref": "#/$defs/id", "description": "The business process (fact table) to query." },

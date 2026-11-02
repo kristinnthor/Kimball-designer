@@ -189,11 +189,11 @@ describe('project file', () => {
       processId: 'bp_store_inventory',
       measureId: 'ms_qty_on_hand',
       aggregate: 'count',
-      groupBy: [{ dimensionId: 'dm_store', attributeId: 'at_store_region', extra: 1 }, { dimensionId: 'dm_product', column: ' brand ' }, { dimensionId: 'dm_date' }, 'junk'],
+      groupBy: [{ dimensionId: 'dm_store', attributeId: 'at_store_region', extra: 1 }, { dimensionId: 'dm_product', column: ' brand ' }],
       filter: { column: { dimensionId: 'dm_store', role: '  ', attributeId: 'at_store_format' }, value: 12 },
     };
     raw.requirements[3].query = { measureId: 'ms_qty_received' };
-    raw.requirements[4].query = { processId: 'bp_gone', measureId: 'ms_gone', aggregate: 'median' };
+    raw.requirements[4].query = { processId: 'bp_gone', measureId: 'ms_gone', aggregate: 'max' };
     const p = normalizeProject(raw);
     expect(p.requirements[2]!.query).toEqual({
       processId: 'bp_store_inventory',
@@ -203,7 +203,70 @@ describe('project file', () => {
     });
     expect(p.requirements[3]).not.toHaveProperty('query');
     // Kept although it no longer matches: validation reports it, so the user can fix it.
-    expect(p.requirements[4]!.query).toEqual({ processId: 'bp_gone', measureId: 'ms_gone', aggregate: 'sum', groupBy: [] });
+    expect(p.requirements[4]!.query).toEqual({ processId: 'bp_gone', measureId: 'ms_gone', aggregate: 'max', groupBy: [] });
     expect(validateSchema(JSON.parse(serializeProject(p))), JSON.stringify(validateSchema.errors)).toBe(true);
+  });
+
+  it('defaults a missing aggregate from the measure', () => {
+    const raw = JSON.parse(serializeProject(retail()));
+    raw.requirements[0].query = { processId: 'bp_retail_sales', measureId: 'ms_net_sales', groupBy: [], filter: null };
+    raw.requirements[1].query = { processId: 'bp_retail_sales', groupBy: [] };
+    const p = normalizeProject(raw);
+    expect(p.requirements[0]!.query).toEqual({ processId: 'bp_retail_sales', measureId: 'ms_net_sales', aggregate: 'sum', groupBy: [] });
+    expect(p.requirements[1]!.query).toEqual({ processId: 'bp_retail_sales', aggregate: 'count', groupBy: [] });
+  });
+
+  const category = { dimensionId: 'dm_product', attributeId: 'at_prod_category' };
+  it.each<[string, Record<string, unknown>]>([
+    ['an unknown aggregate', { measureId: 'ms_net_sales', aggregate: 'median', groupBy: [category] }],
+    ['a sum without a fact', { aggregate: 'sum', groupBy: [category] }],
+    ['a column with a mistyped key', { aggregate: 'count', groupBy: [{ dimension: 'dm_product', attributeId: 'at_prod_category' }] }],
+    ['a column that is not an object', { aggregate: 'count', groupBy: ['dm_product'] }],
+    ['three groups', { aggregate: 'count', groupBy: [category, category, category] }],
+    ['groups that are not a list', { aggregate: 'count', groupBy: 'dm_product' }],
+    ['a filter with a mistyped key', { aggregate: 'count', groupBy: [], filter: { by: category, value: 'Snacks' } }],
+  ])('drops a query with %s rather than answer a different question', (_, query) => {
+    const raw = JSON.parse(serializeProject(retail()));
+    raw.requirements[0].query = { processId: 'bp_retail_sales', ...query };
+    expect(normalizeProject(raw).requirements[0]).not.toHaveProperty('query');
+  });
+});
+
+describe('edge cases', () => {
+  it('names the aggregate of a removed fact', () => {
+    const p = retail();
+    p.requirements[0]!.query = categoryByWeek;
+    p.processes[0]!.facts = p.processes[0]!.facts.filter((f) => f.id !== 'ms_net_sales');
+    expect(requirementAnswers(p)[0]!.description).toBe(
+      'Retail sales: sum of a missing fact (ms_net_sales) by Product › Category and Date › Fiscal week',
+    );
+  });
+
+  it('matches roles whatever the spacing', () => {
+    const p = retail();
+    p.processes[0]!.dimensions.find((u) => u.dimensionId === 'dm_employee')!.roles = ['Cashier '];
+    const model = physicalModel(p);
+    const saved = toRequirementQuery(model, { fact: 'fact_retail_sales', measure: null, aggregate: 'count', groupBy: [{ column: 'cashier_employee_key', attribute: 'job_role' }] })!;
+    expect(saved.groupBy).toEqual([{ dimensionId: 'dm_employee', role: 'Cashier', attributeId: 'at_emp_role' }]);
+    p.requirements[0]!.query = saved;
+    expect(requirementAnswers(p, model)[0]!.status).toBe('answered');
+  });
+
+  it('keeps an added calendar column once the design lists it as an attribute', () => {
+    const p = retail();
+    const date = p.dimensions.find((d) => d.id === 'dm_date')!;
+    date.attributes = [];
+    p.requirements[0]!.query = { processId: 'bp_retail_sales', aggregate: 'count', groupBy: [{ dimensionId: 'dm_date', column: 'month_name' }] };
+    expect(requirementAnswers(p)[0]!.status).toBe('answered');
+    date.attributes = [{ id: 'at_month', name: 'Month name', description: '', scdType: null }];
+    expect(requirementAnswers(p)[0]!.query!.groupBy).toEqual([{ column: 'date_key', attribute: 'month_name' }]);
+  });
+
+  it('is outdated when its process has no dimensions left to explore', () => {
+    const p = retail();
+    p.requirements[0]!.query = { processId: 'bp_retail_sales', measureId: 'ms_net_sales', aggregate: 'sum', groupBy: [] };
+    expect(requirementAnswers(p)[0]!.status).toBe('answered');
+    p.processes[0]!.dimensions = [];
+    expect(requirementAnswers(p)[0]!.status).toBe('outdated');
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AGGREGATES,
   DATA_TYPES,
@@ -199,8 +199,13 @@ function Explorer({
   const result = runQuery(model, data, query, dialect);
   const max = Math.max(1, ...result.rows.map((r) => Math.abs(Number(r[r.length - 1]) || 0)));
   const filterValues = query.filter ? distinctValues(model, data, fact.name, query.filter.by) : [];
+  // A saved value may not occur in the made-up rows; show it rather than another value.
+  const missingValue = query.filter && !filterValues.includes(query.filter.value) ? query.filter.value : null;
   const process = project.processes.find((p) => p.id === fact.sourceId);
-  const linked = project.requirements.filter((r) => process && r.processIds.includes(process.id) && r.statement.trim());
+  const answers = requirementAnswers(project, model);
+  const linked = answers.filter((a) => process && a.requirement.processIds.includes(process.id) && a.requirement.statement.trim());
+  const answerNote = (a: RequirementAnswer) =>
+    a.status === 'outdated' ? ' (saved query no longer matches)' : a.status === 'answered' && a.query?.fact === fact.name ? ' (answered)' : '';
   const [first, second] = query.groupBy;
 
   return (
@@ -275,6 +280,7 @@ function Explorer({
           <label className="field">
             <span className="field-label">equals</span>
             <select className="select" value={query.filter.value} onChange={(e) => set({ filter: { ...query.filter!, value: e.target.value } })}>
+              {missingValue !== null && <option value={missingValue}>{missingValue} (not in the sample data)</option>}
               {filterValues.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -288,7 +294,7 @@ function Explorer({
       {linked.length > 0 && (
         <p className="hint">
           Questions this process should answer:{' '}
-          {linked.map((r) => `R${project.requirements.indexOf(r) + 1} “${r.statement.trim()}”${r.query ? ' (answered)' : ''}`).join(' · ')}
+          {linked.map((a) => `${a.label} “${a.requirement.statement.trim()}”${answerNote(a)}`).join(' · ')}
         </p>
       )}
       {result.warning && <div className="callout warning">{result.warning}</div>}
@@ -360,6 +366,16 @@ function RequirementCoverage({
   current: ExploreQuery | null;
   onShow: (q: ExploreQuery) => void;
 }) {
+  // Saving or removing replaces the clicked button, so focus moves to the row's first
+  // remaining button (or the row) instead of falling back to the page.
+  const table = useRef<HTMLTableElement>(null);
+  const [refocus, setRefocus] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!refocus) return;
+    const row = table.current?.querySelector<HTMLElement>(`tr[data-id="${refocus}"]`);
+    (row?.querySelector<HTMLElement>('button:not(:disabled)') ?? row)?.focus();
+    setRefocus(null);
+  }, [refocus]);
   const answers = requirementAnswers(project, model)
     .filter((a) => a.requirement.statement.trim() && a.requirement.priority !== 'wont')
     .sort((a, b) => PRIORITY_ORDER.indexOf(a.requirement.priority) - PRIORITY_ORDER.indexOf(b.requirement.priority));
@@ -384,16 +400,19 @@ function RequirementCoverage({
       r.query = saved;
       if (!r.processIds.includes(saved.processId)) r.processIds.push(saved.processId);
     });
+    setRefocus(a.requirement.id);
     pushToast(
       `${a.label} is answered by the question above.${linked || !process ? '' : ` It is now also linked to ${displayName(process)}.`}`,
       'success',
     );
   };
-  const remove = (a: RequirementAnswer) =>
+  const remove = (a: RequirementAnswer) => {
     removeWithUndo(`the answer to ${a.label}`, (d) => {
       const r = d.requirements.find((x) => x.id === a.requirement.id);
       if (r) delete r.query;
     });
+    setRefocus(a.requirement.id);
+  };
 
   return (
     <div className="card stack">
@@ -414,7 +433,7 @@ function RequirementCoverage({
         )}
       </p>
       <div className="table-wrap">
-        <table className="data coverage">
+        <table className="data coverage" ref={table}>
           <thead>
             <tr>
               <th style={{ width: 48 }}>#</th>
@@ -428,7 +447,7 @@ function RequirementCoverage({
           </thead>
           <tbody>
             {answers.map((a) => (
-              <tr key={a.requirement.id}>
+              <tr key={a.requirement.id} data-id={a.requirement.id} tabIndex={-1}>
                 <td>{a.label}</td>
                 <td>
                   <span className={`badge ${a.requirement.priority === 'must' ? 'fact' : ''}`}>{PRIORITIES.find((p) => p.value === a.requirement.priority)!.label}</span>
@@ -796,7 +815,8 @@ export function PrototypePhase() {
   const show = (q: ExploreQuery) => {
     setDraft(q);
     const explorer = document.getElementById(EXPLORE_ID);
-    explorer?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    explorer?.scrollIntoView?.({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
     explorer?.focus({ preventScroll: true });
   };
   const notReady = project.processes.filter((p) => !isReadyToBuild(p));

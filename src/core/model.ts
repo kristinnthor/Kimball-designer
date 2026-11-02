@@ -78,7 +78,7 @@ export interface Requirement {
 
 /**
  * A dimension column in a saved query, in design terms (ids and role names, not
- * table and column names), so the query survives renames.
+ * table and column names), so renaming a process, fact, dimension or attribute keeps the query.
  */
 export interface QueryColumn {
   dimensionId: Id;

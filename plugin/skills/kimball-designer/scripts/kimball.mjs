@@ -272,15 +272,24 @@ function queryColumn(v) {
 function normalizeQuery(v) {
   if (!isObj(v) || !safeId(v.processId)) return void 0;
   const measureId = safeId(v.measureId);
-  const aggregate = oneOf(v.aggregate, AGGREGATES, measureId ? "sum" : "count");
+  if (v.aggregate != null && !AGGREGATES.includes(v.aggregate)) return void 0;
+  const aggregate = v.aggregate ?? (measureId ? "sum" : "count");
+  if (aggregate !== "count" && !measureId) return void 0;
+  const groups = v.groupBy ?? [];
+  if (!Array.isArray(groups) || groups.length > QUERY_GROUPS_MAX) return void 0;
+  const groupBy = groups.map(queryColumn);
+  if (groupBy.some((c) => c === null)) return void 0;
   const query = {
     processId: safeId(v.processId),
-    ...measureId && aggregate !== "count" ? { measureId } : {},
-    aggregate: measureId ? aggregate : "count",
-    groupBy: (Array.isArray(v.groupBy) ? v.groupBy : []).map(queryColumn).filter((c) => c !== null).slice(0, QUERY_GROUPS_MAX)
+    ...aggregate !== "count" ? { measureId } : {},
+    aggregate,
+    groupBy
   };
-  const filter = isObj(v.filter) ? queryColumn(v.filter.column) : null;
-  if (filter && isObj(v.filter)) query.filter = { column: filter, value: str(v.filter.value) };
+  if (v.filter != null) {
+    const column = isObj(v.filter) ? queryColumn(v.filter.column) : null;
+    if (!column || !isObj(v.filter)) return void 0;
+    query.filter = { column, value: str(v.filter.value) };
+  }
   return query;
 }
 function normalizeRequirement(o) {
@@ -1372,7 +1381,7 @@ function querySql(model, query, dialect) {
 // src/core/traceability.ts
 function fromRequirementQuery(model, query) {
   const fact = model.tables.find((t) => t.kind === "fact" && t.sourceId === query.processId);
-  if (!fact) return null;
+  if (!fact?.columns.some((c) => c.role === "foreign-key" || c.role === "degenerate")) return null;
   const options = new Set(groupOptions(model, fact).map((o) => o.key));
   const by = (q) => {
     let g;
@@ -1381,10 +1390,10 @@ function fromRequirementQuery(model, query) {
       g = c && { column: c.name };
     } else {
       const fk = fact.columns.find(
-        (x) => x.source.kind === "usage" && x.source.dimensionId === q.dimensionId && (x.source.role ?? "") === (q.role ?? "")
+        (x) => x.source.kind === "usage" && x.source.dimensionId === q.dimensionId && (x.source.role ?? "").trim() === (q.role ?? "").trim()
       );
       const dim = fk && model.tables.find((t) => t.name === fk.references?.table);
-      const a = dim?.columns.find((x) => q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column && !attributeIdOf(x));
+      const a = dim?.columns.find((x) => q.attributeId ? attributeIdOf(x) === q.attributeId : x.name === q.column);
       g = fk && a && { column: fk.name, attribute: a.name };
     }
     return g && options.has(groupKey(g)) ? g : null;
@@ -1411,7 +1420,7 @@ function fromRequirementQuery(model, query) {
 function describeRequirementQuery(project, query) {
   const process2 = processById(project, query.processId);
   const measure = process2?.facts.find((f) => f.id === query.measureId);
-  const what = query.aggregate === "count" || !measure ? "number of rows" : `${AGGREGATES2.find((a) => a.value === query.aggregate).label.toLowerCase()} of ${displayName(measure)}`;
+  const what = query.aggregate === "count" ? "number of rows" : `${AGGREGATES2.find((a) => a.value === query.aggregate).label.toLowerCase()} of ${measure ? displayName(measure) : `a missing fact (${query.measureId})`}`;
   const column = (q) => {
     const dim = dimensionById(project, q.dimensionId);
     const subject = q.role?.trim() || (dim ? displayName(dim) : q.dimensionId);
