@@ -7,10 +7,13 @@ export async function readProject(file: string): Promise<KimballProject> {
   return parseProject(await readFile(file, 'utf8'));
 }
 
+let tmpCounter = 0;
+
 /** Writes text atomically (temp file + rename), creating parent folders. */
 export async function writeFileAtomic(file: string, text: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  // Unique per call, so two saves in the same millisecond never share a temp file.
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}-${(tmpCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   await writeFile(tmp, text, 'utf8');
   try {
     await rename(tmp, file);

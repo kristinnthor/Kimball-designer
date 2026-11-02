@@ -47,7 +47,7 @@ describe('bus matrix exporters', () => {
     const p = tinyProject();
     p.processes[0]!.grain = 'One row per line, "atomic"';
     const csv = busMatrixToCsv(p).split('\r\n');
-    expect(csv[0]).toBe('Business process,Grain,Date,Product,Store');
+    expect(csv[0]).toBe('﻿Business process,Grain,Date,Product,Store');
     expect(csv[1]).toBe('Sales,"One row per line, ""atomic""",X,X,X');
   });
 

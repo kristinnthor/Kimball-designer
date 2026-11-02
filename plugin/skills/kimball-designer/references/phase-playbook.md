@@ -105,3 +105,16 @@ Open with: *"In one or two sentences, what decisions should this warehouse help 
 - Review open questions: which block the first iteration?
 - `$KD render <file> --out kimball/out` and give the hand-off message (`references/deliverables.md`).
 - Suggest next steps: detailed dimension design (attributes, SCD strategy), source-to-target mapping, then build the first fact table.
+- Offer the prototype (phase 11) to try the design with data first.
+
+## 11 · Prototype (`prototype`)
+
+**Done when:** every process has a grain, at least one dimension, and facts (or is factless), so it can be built as a table.
+
+- Ask which platform they target; record it in `physical.dialect` only if they choose something other than PostgreSQL.
+- Propose business keys, data types and realistic sample values per attribute; record what the user accepts (`references/prototype-guide.md`).
+- `$KD prototype <file> --out kimball/prototype`; with Docker and the user's go-ahead, `docker compose up -d` and run a few requirement queries.
+- Typical situations:
+  - *"Is this real data?"* — No: made-up rows that test the structure. Say so whenever you show results.
+  - *A requirement can't be answered* — that is a design finding: a missing dimension, attribute or fact, or the wrong grain. Go back to that phase.
+  - *"Which indexes do we need?"* — Walk through `index-recommendations.md`: keys now, columnstore/BRIN/partitioning when the tables are large.

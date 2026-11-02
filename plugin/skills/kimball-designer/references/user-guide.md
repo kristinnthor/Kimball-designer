@@ -6,7 +6,7 @@ From first interview to bus matrix. Try it at [kimball.kristinn.eu](https://kimb
 
 1. [Overview](#overview)
 2. [What you get](#what-you-get)
-3. [The ten phases](#the-ten-phases)
+3. [The eleven phases](#the-eleven-phases)
 4. [Demos](#demos)
 5. [Ways to use it](#ways-to-use-it)
 6. [Saving and privacy](#saving-and-privacy)
@@ -19,7 +19,7 @@ From first interview to bus matrix. Try it at [kimball.kristinn.eu](https://kimb
 
 Kimball Designer guides you through the **business-requirements stage of the Kimball method**: the short, disciplined process that comes before anyone designs a table. You interview the business, find the business processes that produce the numbers, declare their grain, and agree which dimensions they share.
 
-It works in your browser, inside Claude as a skill, or both at once, and ends with the two pictures every Kimball project needs: a **bubble diagram** per business process and the **enterprise bus matrix**.
+It works in your browser, inside Claude as a skill, or both at once, and ends with the two pictures every Kimball project needs: a **bubble diagram** per business process and the **enterprise bus matrix**. A last, optional step turns the design into tables with sample data to explore, a CREATE TABLE script with index advice, and a Docker sandbox.
 
 **Who it is for**
 
@@ -28,11 +28,11 @@ It works in your browser, inside Claude as a skill, or both at once, and ends wi
 - **Data architects** planning conformed dimensions across teams.
 - **Business analysts and product owners** running requirements workshops.
 
-The work is split into ten short phases in three stages. **Discover** captures the business context, **Model** applies Kimball’s four-step design (process, grain, dimensions, facts), and **Deliver** turns it into diagrams, a matrix and documents. The coach panel explains each phase as you go, and the stepper shows how far you are.
+The work is split into eleven short phases in four stages. **Discover** captures the business context, **Model** applies Kimball’s four-step design (process, grain, dimensions, facts), **Deliver** turns it into diagrams, a matrix and documents, and **Build** lets you try the design on sample data and get the SQL to build it. The coach panel explains each phase as you go, and the stepper shows how far you are.
 
 ## What you get
 
-At the end of the ten phases you have an agreed, documented high-level dimensional design: the blueprint the Kimball method asks for before anyone builds a table.
+After the first ten phases you have an agreed, documented high-level dimensional design: the blueprint the Kimball method asks for before anyone builds a table. The Prototype phase then gives you a first physical version of it to try out.
 
 ### What the process gives you
 
@@ -143,6 +143,21 @@ The single source of truth behind every deliverable above, described by a JSON S
 
 **Where:** Project menu → *Export project file*, or the file `kimball serve` keeps in sync.
 
+#### Prototype: sample data, SQL and a sandbox
+
+Your design as a star schema filled with made-up rows, a CREATE TABLE script with index advice, and a PostgreSQL sandbox for Docker. *(In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV · `kimball prototype`, `kimball ddl`)*
+
+- One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).
+- Sample rows you can group and filter in the browser, with the matching SQL.
+- CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).
+- A Docker Compose sandbox that loads the tables and data on first start.
+
+**Who uses it:** Data engineers starting the build, and the business users who want to see how their questions will be answered.
+
+**Why it matters:** Problems with the grain or missing dimensions show up in minutes with rows in front of you, instead of after the first load job.
+
+**Where:** Phase 11 *Prototype*, or `kimball prototype` and `kimball ddl` from the CLI. Claude can suggest realistic sample values for your attributes.
+
 #### Claude hand-off summary
 
 A compact progress summary you can paste into Claude to continue the work there. *(Plain text)*
@@ -159,19 +174,20 @@ A compact progress summary you can paste into Claude to continue the work there.
 
 - Build the conformed dimensions first: the columns with the most marks in the bus matrix.
 - Pick the top process on the prioritisation grid and do its detailed design: every attribute, slowly changing dimension strategy and source-to-target mapping.
+- Try it in phase 11 *Prototype* first: query the sample data, check each must-have requirement can be answered, and start from the generated CREATE TABLE script.
 - Build and release that one process end to end, then the next row of the matrix.
 - Keep the project file in your repository and update it when scope changes, so the diagrams stay current.
 
 ### Not included
 
-Kimball Designer stops at the agreed high-level design. It does not produce:
+Kimball Designer covers the high-level design and a first physical prototype. It does not produce:
 
-- Physical table designs, DDL or SQL.
+- A finished physical design: the CREATE TABLE script is a starting point to review, not production-ready DDL.
 - Source-to-target mappings and ETL or ELT code.
 - Data profiling or connections to your source systems.
 - Dashboards or reports.
 
-## The ten phases
+## The eleven phases
 
 | # | Phase | You do | You record | Done when |
 |---|---|---|---|---|
@@ -185,6 +201,7 @@ Kimball Designer stops at the agreed high-level design. It does not produce:
 | 8 | **Bubble diagrams** | Review each process as a bubble diagram with its stakeholders. | Nothing new: diagrams are drawn from your model. Click a bubble to edit it. | Every process has a diagram (at least one dimension). |
 | 9 | **Bus matrix** | Check the processes against the shared dimensions and fill gaps. | Usage marks, toggled directly in the grid. | Every dimension is used by a process. |
 | 10 | **Review & export** | Resolve the findings and export the deliverables. | Fixes; then download the files or hand off to Claude. | There are no errors or warnings. |
+| 11 | **Prototype** | Explore the design as tables filled with sample data, then download the CREATE TABLE script, index advice and a Docker sandbox. | Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values. | Every process has a grain, dimensions and facts, so it can be built as a table. |
 
 ## Demos
 
@@ -310,6 +327,8 @@ The `kimball` CLI ships inside the skill and needs only Node 18 or later: `node 
 | `summary <file>` | Progress per phase and what to do next. |
 | `validate <file>` | Check the model against the Kimball rules (`--json`, `--strict`). |
 | `render <file> --out <dir>` | Write the requirements document, bus matrix and bubble diagrams. |
+| `ddl <file> --dialect postgres` | Print the CREATE TABLE script with keys and index advice (postgres, sqlserver, snowflake). |
+| `prototype <file> --out <dir>` | Write the prototype bundle: Docker sandbox, scripts, sample data and index recommendations. |
 | `guide [phase]` | Coaching notes for a phase: why, what to ask, tips and pitfalls. |
 | `examples` | List the example projects. |
 
@@ -340,6 +359,8 @@ The `kimball` CLI ships inside the skill and needs only Node 18 or later: `node 
 - **Date dimension.** Calendar dimension; often role-playing (order date, ship date).
 - **Degenerate dimension.** A dimension key with no attributes kept in the fact table (order number, invoice number).
 - **Junk dimension.** A grouping of low-cardinality flags and indicators.
+- **Surrogate key.** A meaningless integer that identifies a dimension row. Facts join on it, so history (type 2) and source changes never break the joins.
+- **Business key.** The identifier the source system uses, such as a customer number or SKU. Kept as a dimension attribute; also called the natural key.
 - **Slowly changing dimension (SCD).** How a dimension attribute keeps history when it changes. Type 0: Retain original value; never changes. Type 1: Overwrite; no history kept. Type 2: Add a new row; full history kept. Type 3: Add a column for the prior value; limited history.
 
 ## Validation rules
@@ -383,7 +404,7 @@ No. The guided UI works on its own, online or from one offline file. Claude adds
 
 **Does it generate SQL or table designs?**
 
-No. It covers the requirements and high-level design that come first. The deliverables are the input to the detailed design and build; see *What happens next*.
+Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data and a Docker sandbox. Review data types and keys in the detailed design before you build for real.
 
 **How long does the process take?**
 

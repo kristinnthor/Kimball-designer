@@ -52,13 +52,29 @@ export async function openProjectFile(serverMode: boolean) {
   }
 }
 
+/**
+ * Applies a structural removal and offers Undo in a toast. Undo only applies while
+ * nothing else has changed since, so it never reverts a different edit.
+ */
+export function removeWithUndo(what: string, recipe: Parameters<typeof store.update>[0]) {
+  store.update(recipe);
+  const after = store.getState().project;
+  pushToast(`Removed ${what}.`, 'info', {
+    label: 'Undo',
+    run: () => {
+      if (store.getState().project === after) store.undo();
+      else pushToast('Other changes were made since. Use Undo (Ctrl+Z) step by step instead.', 'warning');
+    },
+  });
+}
+
 export function exportProjectJson() {
   const project = store.getState().project;
   downloadText(`${slugify(project.meta.name, 'project')}.kimball.json`, serializeProject(project), 'application/json');
 }
 
 export function closeProject() {
-  if (!window.confirm('Close this project? It stays in this browser only until you start another one. Export it first to keep a copy.')) {
+  if (!window.confirm('Close this project? It is removed from this browser. Export it first if you want to keep a copy.')) {
     return;
   }
   clearLocalProject();

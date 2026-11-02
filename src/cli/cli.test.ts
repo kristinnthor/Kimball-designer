@@ -64,7 +64,7 @@ describe('kimball CLI', () => {
     await run('init', 'p.kimball.json');
     stdout = '';
     expect(await run('summary', 'p.kimball.json')).toBe(0);
-    expect(stdout).toContain('Progress: 0/10 phases complete');
+    expect(stdout).toContain('Progress: 0/11 phases complete');
     expect(stdout).toContain('Suggested next step: phase 1 "Kickoff"');
   });
 
@@ -104,6 +104,36 @@ describe('kimball CLI', () => {
     expect(stderr).toContain('not valid JSON');
     expect(await run('frobnicate')).toBe(1);
     expect(await run('summary', '--bogus')).toBe(2);
+  });
+
+  it('ddl prints or writes the CREATE TABLE script for a dialect', async () => {
+    await run('init', 'r.kimball.json', '--example', 'retail');
+    expect(await run('ddl', 'r.kimball.json')).toBe(0);
+    expect(stdout).toContain('star schema for PostgreSQL');
+    expect(stdout).toContain('CREATE TABLE fact_retail_sales (');
+    stdout = '';
+    expect(await run('ddl', 'r.kimball.json', '--dialect', 'sqlserver', '--drop', '--out', 'sql/schema.sql')).toBe(0);
+    const sql = readFileSync(join(dir, 'sql', 'schema.sql'), 'utf8');
+    expect(sql).toContain('CLUSTERED COLUMNSTORE');
+    expect(sql).toContain('DROP TABLE IF EXISTS fact_retail_sales;');
+    expect(await run('ddl', 'r.kimball.json', '--dialect', 'oracle')).toBe(1);
+    expect(stderr).toContain('Unknown dialect');
+  });
+
+  it('prototype writes the sandbox bundle', async () => {
+    await run('init', 'models/r.kimball.json', '--example', 'saas');
+    expect(await run('prototype', 'models/r.kimball.json', '--rows', '50', '--seed', '7', '--dialect', 'snowflake')).toBe(0);
+    const out = join(dir, 'models', 'prototype');
+    expect(readdirSync(out).sort()).toEqual(
+      ['README.md', 'data', 'data.snowflake.sql', 'docker-compose.yml', 'index-recommendations.md', 'initdb', 'queries.sql', 'schema.sql'].sort(),
+    );
+    expect(readdirSync(join(out, 'initdb'))).toEqual(['01-schema.sql', '02-data.sql']);
+    expect(readFileSync(join(out, 'schema.sql'), 'utf8')).toContain('Snowflake');
+    expect(readFileSync(join(out, 'initdb', '02-data.sql'), 'utf8')).toContain('Seed 7');
+    const facts = readFileSync(join(out, 'data', 'fact_subscription_changes.csv'), 'utf8').trim().split('\r\n');
+    expect(facts).toHaveLength(51);
+    expect(stdout).toContain('docker compose up -d');
+    expect(await run('prototype', 'models/r.kimball.json', '--rows', 'many')).toBe(1);
   });
 
   it('serve creates the file and starts and stops a server', async () => {

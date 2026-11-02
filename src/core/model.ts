@@ -23,6 +23,7 @@ export const PHASE_IDS = [
   'bubbles',
   'matrix',
   'review',
+  'prototype',
 ] as const;
 export type PhaseId = (typeof PHASE_IDS)[number];
 
@@ -34,6 +35,9 @@ export type Additivity = 'additive' | 'semi-additive' | 'non-additive';
 export type DimensionKind = 'standard' | 'date' | 'degenerate' | 'junk';
 export type ScdType = 0 | 1 | 2 | 3;
 export type QuestionStatus = 'open' | 'answered';
+/** Logical column type for the physical design; mapped to each SQL dialect's types. */
+export type DataType = 'text' | 'integer' | 'decimal' | 'date' | 'boolean';
+export type SqlDialect = 'postgres' | 'sqlserver' | 'snowflake';
 
 export interface ProjectMeta {
   id: Id;
@@ -75,6 +79,10 @@ export interface Measure {
   description: string;
   additivity: Additivity;
   unit: string;
+  /** Physical design (optional): integer or decimal. Inferred from the name and unit when absent. */
+  dataType?: DataType;
+  /** Range for prototype sample values, [min, max]. Inferred when absent. */
+  sampleRange?: [number, number];
 }
 
 export interface DimensionUsage {
@@ -105,6 +113,12 @@ export interface DimensionAttribute {
   name: string;
   description: string;
   scdType: ScdType | null;
+  /** Physical design (optional). Inferred from the name when absent. */
+  dataType?: DataType;
+  /** The business (natural) key from the source system, e.g. a customer number. */
+  businessKey?: boolean;
+  /** Realistic example values for prototype data, e.g. suggested by Claude and confirmed by the user. */
+  sampleValues?: string[];
 }
 
 export interface Dimension {
@@ -128,6 +142,18 @@ export interface OpenQuestion {
   status: QuestionStatus;
 }
 
+/** Settings for the Prototype phase: the SQL dialect and how the sample data is generated. */
+export interface PhysicalSettings {
+  dialect: SqlDialect;
+  /** Seed for the sample data, so the same settings always give the same rows. */
+  seed: number;
+  /** First and last day of the sample dates (YYYY-MM-DD). */
+  dateFrom: string;
+  dateTo: string;
+  /** Sample rows per table, keyed by dimension or process id. Missing ids use the default. */
+  rows: Record<Id, number>;
+}
+
 export interface KimballProject {
   $schema?: string;
   schemaVersion: typeof SCHEMA_VERSION;
@@ -138,6 +164,8 @@ export interface KimballProject {
   dimensions: Dimension[];
   assumptions: Assumption[];
   openQuestions: OpenQuestion[];
+  /** Prototype settings; absent until the user or Claude changes them. */
+  physical?: PhysicalSettings;
 }
 
 // ─── Vocabularies (labels + explanations shared by UI, docs and exporters) ───
@@ -216,6 +244,20 @@ export const DIMENSION_KINDS: Option<DimensionKind>[] = [
     description: 'A dimension key with no attributes kept in the fact table (order number, invoice number).',
   },
   { value: 'junk', label: 'Junk', description: 'A grouping of low-cardinality flags and indicators.' },
+];
+
+export const DATA_TYPES: Option<DataType>[] = [
+  { value: 'text', label: 'Text', description: 'Names, codes and descriptions.' },
+  { value: 'integer', label: 'Whole number', description: 'Counts, quantities, years.' },
+  { value: 'decimal', label: 'Decimal', description: 'Amounts, rates and other numbers with decimals.' },
+  { value: 'date', label: 'Date', description: 'A calendar date.' },
+  { value: 'boolean', label: 'Yes / no', description: 'A flag or indicator.' },
+];
+
+export const SQL_DIALECTS: Option<SqlDialect>[] = [
+  { value: 'postgres', label: 'PostgreSQL', description: 'PostgreSQL 13 or later. Also used by the Docker sandbox.' },
+  { value: 'sqlserver', label: 'SQL Server', description: 'SQL Server 2016 or later, or Azure SQL.' },
+  { value: 'snowflake', label: 'Snowflake', description: 'Snowflake. Constraints are informational; no indexes.' },
 ];
 
 export const SCD_TYPES: Option<ScdType>[] = [
@@ -346,6 +388,23 @@ export function createAssumption(text = ''): Assumption {
 
 export function createOpenQuestion(init: Partial<OpenQuestion> = {}): OpenQuestion {
   return { id: newId(ID_PREFIX.question), text: '', owner: '', status: 'open', ...init };
+}
+
+export const SAMPLE_ROWS_MAX = 100_000;
+
+/**
+ * Default prototype settings: PostgreSQL and a full calendar year of sample dates,
+ * the year before the project was created (so they never change by themselves).
+ */
+export function defaultPhysicalSettings(createdAt: string): PhysicalSettings {
+  const created = Number(createdAt.slice(0, 4));
+  const year = Number.isInteger(created) && created > 1900 ? created - 1 : 2025;
+  return { dialect: 'postgres', seed: 1, dateFrom: `${year}-01-01`, dateTo: `${year}-12-31`, rows: {} };
+}
+
+/** The project's prototype settings, or the defaults when it has none yet. */
+export function physicalSettings(project: KimballProject): PhysicalSettings {
+  return project.physical ?? defaultPhysicalSettings(project.meta.createdAt);
 }
 
 // ─── Lookups ───

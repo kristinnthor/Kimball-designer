@@ -1,4 +1,5 @@
 import { PhaseFrame } from '../components/PhaseFrame';
+import { StakeholderInput } from '../components/StakeholderInput';
 import { TagInput, TextArea, TextInput } from '../components/ui';
 import { update, useProject } from '../store/store';
 
@@ -12,7 +13,7 @@ export function KickoffPhase() {
       <div className="card accent-fact stack">
         <div className="grid-2">
           <TextInput label="Project name" value={meta.name} onChange={set('name')} placeholder="e.g. Retail analytics" className="title" />
-          <TextInput label="Sponsor" value={meta.sponsor} onChange={set('sponsor')} placeholder="Name and role of the business sponsor" />
+          <StakeholderInput label="Sponsor" value={meta.sponsor} onChange={set('sponsor')} newType="executive" placeholder="Name and role of the business sponsor" />
         </div>
         <TextArea
           label="Purpose"

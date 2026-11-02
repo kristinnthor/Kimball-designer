@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { nextPhase, phaseDef, previousPhase, STAGES, type PhaseId } from '../../core';
+import { PHASES, nextPhase, phaseDef, previousPhase, STAGES, type PhaseId } from '../../core';
 import { goToPhase } from '../store/routing';
 import { IconArrowLeft, IconArrowRight } from './icons';
 
@@ -13,7 +13,9 @@ export function PhaseFrame({ phase, children, lead }: { phase: PhaseId; children
       <header className="phase-head">
         <div className="phase-kicker">
           <span className={`stage-chip ${stage.id}`}>{stage.title}</span>
-          <span>Phase {def.number} of 10</span>
+          <span>
+            Phase {def.number} of {PHASES.length}
+          </span>
         </div>
         <h1>{def.title}</h1>
         <p className="phase-goal">{def.goal}</p>

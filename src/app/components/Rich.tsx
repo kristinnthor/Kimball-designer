@@ -1,6 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { copyText } from '../lib/files';
-import { pushToast } from '../store/toasts';
+import { copyWithToast } from '../lib/files';
 import { IconCopy } from './icons';
 
 const TOKEN = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
@@ -44,7 +43,7 @@ export function CodeBlock({ code, label }: { code: string; label: string }) {
         className="btn ghost icon sm"
         aria-label={`Copy: ${label}`}
         title="Copy"
-        onClick={async () => pushToast((await copyText(code)) ? 'Copied to the clipboard.' : 'Copy failed.', 'success')}
+        onClick={() => void copyWithToast(code, 'Copied to the clipboard.')}
       >
         <IconCopy />
       </button>

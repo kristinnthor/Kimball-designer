@@ -12,3 +12,8 @@ export * from './version';
 export * from './examples';
 export * from './guidance';
 export * from './help';
+export * from './physical';
+export * from './ddl';
+export * from './sampledata';
+export * from './explore';
+export * from './prototype';

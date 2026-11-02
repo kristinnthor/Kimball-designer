@@ -206,6 +206,27 @@ export const GUIDANCE: Record<PhaseId, PhaseGuidance> = {
     pitfalls: ['Skipping the sponsor review because the diagrams "look right".'],
     examples: [],
   },
+  prototype: {
+    why: 'A design is easier to judge with rows in it. The prototype turns each dimension and business process into a table, fills them with made-up data and lets you ask the questions from your requirements. You see whether the grain, the dimensions and the facts really answer them before anyone writes a load job, and you get a CREATE TABLE script and index advice to start the build.',
+    ask: [
+      'Can we answer each must-have requirement with one of these queries?',
+      'Which attribute is the business key of each dimension in the source system?',
+      'Roughly how many rows will each fact table get per day or month?',
+      'Which database platform will the warehouse run on?',
+    ],
+    tips: [
+      'Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.',
+      'Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.',
+      'Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.',
+      'Treat the script as a starting point: review data types, text lengths and business keys before you build.',
+    ],
+    pitfalls: [
+      'Mistaking sample data for real data: the rows are random, only the structure is yours.',
+      'Adding indexes everywhere: fact tables need few (or a columnstore); dimensions need their keys.',
+      'Building every table at once instead of the top process on the prioritisation grid first.',
+    ],
+    examples: ['"Net sales amount by product category and month" for a retail sales fact table.'],
+  },
 };
 
 /** Interview questions by stakeholder type, used in the Stakeholders phase and the skill's interview guide. */

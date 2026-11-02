@@ -29,7 +29,7 @@ export interface HelpSection {
 export const HELP_SECTIONS: HelpSection[] = [
   { id: 'overview', title: 'Overview' },
   { id: 'deliverables', title: 'What you get' },
-  { id: 'phases', title: 'The ten phases' },
+  { id: 'phases', title: 'The eleven phases' },
   { id: 'demos', title: 'Demos' },
   { id: 'ways', title: 'Ways to use it' },
   { id: 'saving', title: 'Saving and privacy' },
@@ -44,7 +44,7 @@ export const HELP_SECTIONS: HelpSection[] = [
 export const HELP_OVERVIEW = {
   intro: [
     'Kimball Designer guides you through the **business-requirements stage of the Kimball method**: the short, disciplined process that comes before anyone designs a table. You interview the business, find the business processes that produce the numbers, declare their grain, and agree which dimensions they share.',
-    'It works in your browser, inside Claude as a skill, or both at once, and ends with the two pictures every Kimball project needs: a **bubble diagram** per business process and the **enterprise bus matrix**.',
+    'It works in your browser, inside Claude as a skill, or both at once, and ends with the two pictures every Kimball project needs: a **bubble diagram** per business process and the **enterprise bus matrix**. A last, optional step turns the design into tables with sample data to explore, a CREATE TABLE script with index advice, and a Docker sandbox.',
   ],
   audience: [
     '**Data and BI engineers** starting a new warehouse, lakehouse or data mart.',
@@ -53,13 +53,13 @@ export const HELP_OVERVIEW = {
     '**Business analysts and product owners** running requirements workshops.',
   ],
   howItFlows:
-    'The work is split into ten short phases in three stages. **Discover** captures the business context, **Model** applies Kimball’s four-step design (process, grain, dimensions, facts), and **Deliver** turns it into diagrams, a matrix and documents. The coach panel explains each phase as you go, and the stepper shows how far you are.',
+    'The work is split into eleven short phases in four stages. **Discover** captures the business context, **Model** applies Kimball’s four-step design (process, grain, dimensions, facts), **Deliver** turns it into diagrams, a matrix and documents, and **Build** lets you try the design on sample data and get the SQL to build it. The coach panel explains each phase as you go, and the stepper shows how far you are.',
 };
 
 // ─── What you get ───
 
 export const HELP_DELIVERABLES_LEAD =
-  'At the end of the ten phases you have an agreed, documented high-level dimensional design: the blueprint the Kimball method asks for before anyone builds a table.';
+  'After the first ten phases you have an agreed, documented high-level dimensional design: the blueprint the Kimball method asks for before anyone builds a table. The Prototype phase then gives you a first physical version of it to try out.';
 
 export interface HelpOutcome {
   title: string;
@@ -204,6 +204,22 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     where: 'Project menu → *Export project file*, or the file `kimball serve` keeps in sync.',
   },
   {
+    id: 'prototype',
+    title: 'Prototype: sample data, SQL and a sandbox',
+    formats: 'In the UI · `schema.sql`, `index-recommendations.md`, `docker-compose.yml`, CSV · `kimball prototype`, `kimball ddl`',
+    summary: 'Your design as a star schema filled with made-up rows, a CREATE TABLE script with index advice, and a PostgreSQL sandbox for Docker.',
+    contains: [
+      'One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).',
+      'Sample rows you can group and filter in the browser, with the matching SQL.',
+      'CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).',
+      'A Docker Compose sandbox that loads the tables and data on first start.',
+    ],
+    usedBy: 'Data engineers starting the build, and the business users who want to see how their questions will be answered.',
+    why: 'Problems with the grain or missing dimensions show up in minutes with rows in front of you, instead of after the first load job.',
+    where: 'Phase 11 *Prototype*, or `kimball prototype` and `kimball ddl` from the CLI. Claude can suggest realistic sample values for your attributes.',
+    image: { src: 'images/ui-prototype.jpg', alt: 'The Prototype phase: net sales grouped by product category over sample data, with the SQL' },
+  },
+  {
     id: 'handoff',
     title: 'Claude hand-off summary',
     formats: 'Plain text',
@@ -219,21 +235,22 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
 export const HELP_NEXT_STEPS: string[] = [
   'Build the conformed dimensions first: the columns with the most marks in the bus matrix.',
   'Pick the top process on the prioritisation grid and do its detailed design: every attribute, slowly changing dimension strategy and source-to-target mapping.',
+  'Try it in phase 11 *Prototype* first: query the sample data, check each must-have requirement can be answered, and start from the generated CREATE TABLE script.',
   'Build and release that one process end to end, then the next row of the matrix.',
   'Keep the project file in your repository and update it when scope changes, so the diagrams stay current.',
 ];
 
-export const HELP_NOT_INCLUDED_LEAD = 'Kimball Designer stops at the agreed high-level design. It does not produce:';
+export const HELP_NOT_INCLUDED_LEAD = 'Kimball Designer covers the high-level design and a first physical prototype. It does not produce:';
 
 /** Honest scope: what the tool does not produce. */
 export const HELP_NOT_INCLUDED: string[] = [
-  'Physical table designs, DDL or SQL.',
+  'A finished physical design: the CREATE TABLE script is a starting point to review, not production-ready DDL.',
   'Source-to-target mappings and ETL or ELT code.',
   'Data profiling or connections to your source systems.',
   'Dashboards or reports.',
 ];
 
-// ─── The ten phases ───
+// ─── The eleven phases ───
 
 export interface HelpPhase {
   youDo: string;
@@ -291,6 +308,11 @@ export const HELP_PHASES: Record<PhaseId, HelpPhase> = {
     youDo: 'Resolve the findings and export the deliverables.',
     youRecord: 'Fixes; then download the files or hand off to Claude.',
     doneWhen: 'There are no errors or warnings.',
+  },
+  prototype: {
+    youDo: 'Explore the design as tables filled with sample data, then download the CREATE TABLE script, index advice and a Docker sandbox.',
+    youRecord: 'Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values.',
+    doneWhen: 'Every process has a grain, dimensions and facts, so it can be built as a table.',
   },
 };
 
@@ -586,6 +608,8 @@ export const HELP_CLI: HelpCommand[] = [
   { command: 'summary <file>', description: 'Progress per phase and what to do next.' },
   { command: 'validate <file>', description: 'Check the model against the Kimball rules (`--json`, `--strict`).' },
   { command: 'render <file> --out <dir>', description: 'Write the requirements document, bus matrix and bubble diagrams.' },
+  { command: 'ddl <file> --dialect postgres', description: 'Print the CREATE TABLE script with keys and index advice (postgres, sqlserver, snowflake).' },
+  { command: 'prototype <file> --out <dir>', description: 'Write the prototype bundle: Docker sandbox, scripts, sample data and index recommendations.' },
   { command: 'guide [phase]', description: 'Coaching notes for a phase: why, what to ask, tips and pitfalls.' },
   { command: 'examples', description: 'List the example projects.' },
 ];
@@ -630,6 +654,8 @@ export const HELP_GLOSSARY: HelpTerm[] = [
   ...FACT_TABLE_TYPES.map((o) => ({ term: `${o.label} fact table`, definition: o.description })),
   ...ADDITIVITY.map((o) => ({ term: `${o.label} fact`, definition: o.description })),
   ...DIMENSION_KINDS.filter((o) => o.value !== 'standard').map((o) => ({ term: o.value === 'date' ? 'Date dimension' : `${o.label} dimension`, definition: o.description })),
+  { term: 'Surrogate key', definition: 'A meaningless integer that identifies a dimension row. Facts join on it, so history (type 2) and source changes never break the joins.' },
+  { term: 'Business key', definition: 'The identifier the source system uses, such as a customer number or SKU. Kept as a dimension attribute; also called the natural key.' },
   { term: 'Slowly changing dimension (SCD)', definition: `How a dimension attribute keeps history when it changes. ${SCD_TYPES.map((o) => `${o.label}: ${o.description.replace(/\.$/, '')}`).join('. ')}.` },
 ];
 
@@ -662,7 +688,7 @@ export const HELP_FAQ: HelpQuestion[] = [
   },
   {
     q: 'Does it generate SQL or table designs?',
-    a: 'No. It covers the requirements and high-level design that come first. The deliverables are the input to the detailed design and build; see *What happens next*.',
+    a: 'Yes, as a starting point. Phase 11 *Prototype* turns the design into a star schema with a CREATE TABLE script for PostgreSQL, SQL Server or Snowflake, index recommendations, sample data and a Docker sandbox. Review data types and keys in the detailed design before you build for real.',
   },
   {
     q: 'How long does the process take?',

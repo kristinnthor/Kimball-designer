@@ -605,6 +605,103 @@ a {
   font-size: 16px;
 }
 
+/* Text areas grow with their content (see TextArea), so long text stays readable. */
+.textarea.auto {
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.textarea.single {
+  min-height: 42px;
+}
+
+table.data .textarea.single {
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+/* Combobox: free text with suggestions (stakeholders as owners) */
+.combo {
+  position: relative;
+}
+
+.combo.has-list .input {
+  padding-right: 34px;
+}
+
+.combo-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0 var(--kd-radius-md) var(--kd-radius-md) 0;
+  background: transparent;
+  color: var(--kd-muted);
+  cursor: pointer;
+}
+
+.combo-toggle:hover {
+  color: var(--kd-ink);
+}
+
+.combo-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--kd-surface);
+  border: 1px solid var(--kd-line-strong);
+  border-radius: var(--kd-radius-md);
+  box-shadow: var(--kd-shadow-2);
+}
+
+.combo-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--kd-radius-sm);
+  cursor: pointer;
+}
+
+.combo-list li.active {
+  background: var(--kd-dim-soft);
+  color: var(--kd-dim-strong);
+}
+
+.combo-detail {
+  font-size: var(--kd-text-xs);
+  color: var(--kd-muted);
+  text-align: right;
+}
+
+.btn.link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--kd-dim-strong);
+  font-weight: 600;
+  font-size: var(--kd-text-xs);
+  justify-content: flex-start;
+}
+
+.btn.link:hover {
+  text-decoration: underline;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1163,19 +1260,20 @@ table.data .select {
   margin-top: 1px;
 }
 
+/* Paper-coloured text: white on the light theme's dark shades, near-black on the dark theme's light ones. */
 .mark.ok {
   background: var(--kd-success);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.error {
   background: var(--kd-danger);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.warning {
   background: var(--kd-warning);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .mark.info {
@@ -1319,7 +1417,7 @@ table.data .select {
 
 .toast.error {
   background: var(--kd-danger);
-  color: #fff;
+  color: var(--kd-paper);
 }
 
 .toast button {
@@ -1510,4 +1608,210 @@ pre.summary {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Open questions: the question takes the room it needs, the owner sits beside it. */
+.question-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: var(--kd-space-2);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .question-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-wrap {
+  min-width: 0;
+}
+
+/* ─── Build stage and Prototype phase ─── */
+
+.stage-build .stage-dot {
+  background: var(--kd-ink-2);
+}
+
+.stage-chip.build {
+  background: var(--kd-ink);
+  color: var(--kd-paper);
+}
+
+.proto-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kd-space-5) var(--kd-space-6);
+  align-items: flex-end;
+}
+
+.proto-settings input[type='date'] {
+  width: 170px;
+  flex: none;
+}
+
+.explore-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--kd-space-3);
+}
+
+table.data th.num,
+table.data td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-cell {
+  position: relative;
+  min-width: 140px;
+}
+
+.bar-cell .bar {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 10px;
+  max-width: calc(100% - 20px);
+  background: var(--kd-fact-soft);
+  border-radius: 4px;
+}
+
+.bar-cell span:last-child {
+  position: relative;
+}
+
+.code-block {
+  position: relative;
+}
+
+.code-block .btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+pre.code {
+  margin: 0;
+  padding: var(--kd-space-4);
+  padding-right: 110px;
+  background: var(--kd-surface-2);
+  border-radius: var(--kd-radius-md);
+  font-family: var(--kd-font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  max-height: 260px;
+}
+
+pre.code.tall {
+  max-height: 460px;
+  padding-right: var(--kd-space-4);
+}
+
+.table-card {
+  padding: var(--kd-space-3) var(--kd-space-4);
+}
+
+.table-card + .table-card {
+  margin-top: 0;
+}
+
+.table-card > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--kd-space-3);
+  flex-wrap: wrap;
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+.table-card .table-name {
+  font-weight: 700;
+}
+
+table.data.sample td,
+table.data.columns td {
+  white-space: nowrap;
+}
+
+table.data.sample {
+  font-size: 13px;
+}
+
+table.data.columns td.hint {
+  white-space: normal;
+}
+
+.attr-editor > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--kd-text-sm);
+  color: var(--kd-dim-strong);
+}
+
+.attr-editor .tag-input {
+  min-height: 36px;
+  padding: 3px 6px;
+}
+
+table.data.advice td {
+  vertical-align: top;
+}
+
+.advice-sql {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--kd-font-mono);
+  font-size: 12px;
+  color: var(--kd-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.advice-table {
+  border: 1px solid var(--kd-line);
+  border-radius: var(--kd-radius-md);
+  padding: var(--kd-space-3) var(--kd-space-4);
+  background: var(--kd-surface);
+}
+
+.advice-table h3 {
+  font-size: var(--kd-text-sm);
+  margin-bottom: 8px;
+}
+
+.advice-table ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.advice-table li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--kd-space-2);
+  align-items: start;
+  font-size: var(--kd-text-sm);
+}
+
+.advice-table li .badge {
+  justify-content: center;
+}
+
+.chip.missing {
+  border-style: dashed;
+  border-color: var(--kd-warning);
+  color: var(--kd-warning);
+  background: var(--kd-warning-soft);
+}
+
+.combo-list li > span:first-child {
+  white-space: nowrap;
 }

@@ -289,7 +289,7 @@ function Deliverables() {
 
 function Phases({ started }: { started: boolean }) {
   return (
-    <Section id="phases" title="The ten phases" lead="Each phase is short and has one job. The stepper on the left of the app shows which are done; the coach panel explains the current one.">
+    <Section id="phases" title="The eleven phases" lead="Each phase is short and has one job. The stepper on the left of the app shows which are done; the coach panel explains the current one.">
       {STAGES.map((stage) => (
         <div key={stage.id} className="help-stage">
           <h3>

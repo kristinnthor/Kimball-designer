@@ -14,7 +14,8 @@
     "processes": { "type": "array", "items": { "$ref": "#/$defs/process" } },
     "dimensions": { "type": "array", "items": { "$ref": "#/$defs/dimension" } },
     "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
-    "openQuestions": { "type": "array", "items": { "$ref": "#/$defs/openQuestion" } }
+    "openQuestions": { "type": "array", "items": { "$ref": "#/$defs/openQuestion" } },
+    "physical": { "$ref": "#/$defs/physical" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -24,12 +25,33 @@
       "description": "Stable identifier, unique within the file. Readable ids such as \"dm_date\" are encouraged."
     },
     "text": { "type": "string" },
+    "dataType": {
+      "enum": ["text", "integer", "decimal", "date", "boolean"],
+      "description": "Logical column type for the prototype and the CREATE TABLE script. Inferred from the name when absent."
+    },
+    "physical": {
+      "type": "object",
+      "description": "Prototype settings: SQL dialect and how sample data is generated. Absent until changed.",
+      "required": ["dialect"],
+      "properties": {
+        "dialect": { "enum": ["postgres", "sqlserver", "snowflake"] },
+        "seed": { "type": "integer", "minimum": 0, "description": "Seed for the sample data; the same seed gives the same rows." },
+        "dateFrom": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "dateTo": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "rows": {
+          "type": "object",
+          "description": "Sample rows per table, keyed by dimension or process id.",
+          "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 100000 }
+        }
+      },
+      "additionalProperties": false
+    },
     "textList": { "type": "array", "items": { "type": "string" } },
     "score": {
       "oneOf": [{ "type": "integer", "minimum": 1, "maximum": 5 }, { "type": "null" }]
     },
     "phase": {
-      "enum": ["kickoff", "stakeholders", "requirements", "processes", "grain", "dimensions", "facts", "bubbles", "matrix", "review"]
+      "enum": ["kickoff", "stakeholders", "requirements", "processes", "grain", "dimensions", "facts", "bubbles", "matrix", "review", "prototype"]
     },
     "meta": {
       "type": "object",
@@ -84,7 +106,15 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "additivity": { "enum": ["additive", "semi-additive", "non-additive"] },
-        "unit": { "type": "string" }
+        "unit": { "type": "string" },
+        "dataType": { "enum": ["integer", "decimal"], "description": "Column type for the prototype. Inferred from the name and unit when absent." },
+        "sampleRange": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max] for prototype sample values."
+        }
       },
       "additionalProperties": false
     },
@@ -130,7 +160,13 @@
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string" },
         "description": { "type": "string" },
-        "scdType": { "oneOf": [{ "enum": [0, 1, 2, 3] }, { "type": "null" }] }
+        "scdType": { "oneOf": [{ "enum": [0, 1, 2, 3] }, { "type": "null" }] },
+        "dataType": { "$ref": "#/$defs/dataType" },
+        "businessKey": { "type": "boolean", "description": "The business (natural) key from the source system." },
+        "sampleValues": {
+          "$ref": "#/$defs/textList",
+          "description": "Realistic example values for prototype sample data, e.g. suggested by Claude and confirmed by the user."
+        }
       },
       "additionalProperties": false
     },

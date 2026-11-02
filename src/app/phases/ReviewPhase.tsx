@@ -17,13 +17,12 @@ import {
 import { IconCopy, IconDownload } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { SectionHead } from '../components/ui';
-import { copyText, downloadBlob, downloadText } from '../lib/files';
+import { copyWithToast, downloadBlob, downloadText } from '../lib/files';
 import { createZip, type ZipEntry } from '../lib/zip';
 import { useFindings } from '../store/derived';
 import { goToPhase } from '../store/routing';
 import { useProject } from '../store/store';
 import { useSyncStatus } from '../store/sync';
-import { pushToast } from '../store/toasts';
 
 /** Every deliverable, with the same names the CLI `render` command uses. */
 export function deliverables(project: KimballProject): ZipEntry[] {
@@ -135,7 +134,7 @@ export function ReviewPhase() {
         <SectionHead
           title="Hand off to Claude"
           actions={
-            <button type="button" className="btn" onClick={async () => pushToast((await copyText(summary)) ? 'Summary copied.' : 'Copy failed.', 'success')}>
+            <button type="button" className="btn" onClick={() => void copyWithToast(summary, 'Summary copied.')}>
               <IconCopy /> Copy summary
             </button>
           }

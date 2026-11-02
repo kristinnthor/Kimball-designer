@@ -16,7 +16,7 @@ The project file is the single source of truth. The bus matrix and bubble diagra
     "scopeIn": "…",
     "scopeOut": "…",
     "successCriteria": ["…", "…"],
-    "currentPhase": "grain",          // kickoff|stakeholders|requirements|processes|grain|dimensions|facts|bubbles|matrix|review
+    "currentPhase": "grain",          // kickoff|stakeholders|requirements|processes|grain|dimensions|facts|bubbles|matrix|review|prototype
     "createdAt": "2026-11-01T09:00:00.000Z",
     "updatedAt": "2026-11-01T09:00:00.000Z"
   },
@@ -25,7 +25,8 @@ The project file is the single source of truth. The bus matrix and bubble diagra
   "processes": [],
   "dimensions": [],
   "assumptions": [],
-  "openQuestions": []
+  "openQuestions": [],
+  "physical": { … }                   // optional, phase 11 prototype settings (see below)
 }
 ```
 
@@ -69,6 +70,7 @@ The project file is the single source of truth. The bus matrix and bubble diagra
 - `businessValue`, `feasibility`: integers 1–5 or `null`
 - `additivity`: `additive` · `semi-additive` · `non-additive`
 - `dimensions[].roles`: role names for role-playing dimensions; empty array for a single, unnamed role.
+- Optional on a fact, for the prototype: `"dataType": "integer" | "decimal"` (otherwise inferred from name and unit) and `"sampleRange": [min, max]`.
 
 ### Dimension
 ```json
@@ -80,6 +82,18 @@ The project file is the single source of truth. The bus matrix and bubble diagra
 ```
 - `kind`: `standard` · `date` · `degenerate` (a key with no attributes, e.g. order number) · `junk` (bundle of flags)
 - `scdType`: `0` · `1` · `2` · `3` · `null` (not decided)
+- Optional on an attribute, for the prototype (omit when unknown):
+  - `"businessKey": true` — the source system's identifier (customer number, SKU).
+  - `"dataType"`: `text` · `integer` · `decimal` · `date` · `boolean` (otherwise inferred from the name).
+  - `"sampleValues": ["…", "…"]` — realistic example values for the sample data, agreed with the user.
+
+### Prototype settings (optional)
+```json
+"physical": { "dialect": "postgres", "seed": 1, "dateFrom": "2025-01-01", "dateTo": "2025-12-31", "rows": { "bp_retail_sales": 5000 } }
+```
+- `dialect`: `postgres` · `sqlserver` · `snowflake` (target platform for the CREATE TABLE script).
+- `seed`: the same seed gives the same sample rows. `rows`: sample rows per table, keyed by dimension or process id (1–100000).
+- Leave `physical` out until the user changes a setting; the defaults are PostgreSQL and the calendar year before the project was created.
 
 ### Assumption / open question
 ```json
@@ -117,6 +131,8 @@ Always **re-read the file first** (the user may have edited it in the UI), make 
 **Remove a process** — delete it and remove its id from every `requirements[].processIds`.
 
 **Move the UI to a phase** — set `meta.currentPhase`.
+
+**Make the prototype data realistic** — on each agreed attribute add `"sampleValues": [...]` (and `"businessKey": true` on the source identifier), then run `$KD prototype <file>`.
 
 ## Tolerant loading
 

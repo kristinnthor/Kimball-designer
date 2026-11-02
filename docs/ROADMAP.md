@@ -10,6 +10,7 @@ flowchart LR
   M2 --> M4[M4 · Quality & release<br/>e2e · a11y · Pages · v1.0.0]
   M3 --> M4
   M4 --> M5[M5 · Help & onboarding<br/>help page · demos · user guide]
+  M5 --> M6[M6 · Prototype<br/>sample data · DDL · index advice · sandbox]
 ```
 
 ## M0 · Foundation
@@ -30,8 +31,11 @@ Playwright e2e (#33), accessibility (#34), hosted UI on GitHub Pages at kimball.
 ## M5 · Help & onboarding
 In-app Help page that explains what the process delivers (#45), guided demos with a step-by-step demo bar (#46), and a user guide generated from the same content for GitHub and the skill (#47).
 
+## M6 · Prototype and review
+Owner requests after M5: readable open questions (#49), varied example text (#50), stakeholders as owners (#51), the Prototype phase with sample data and a Docker sandbox (#52), CREATE TABLE scripts with index recommendations (#53), and fixes from a full product review (#54).
+
 ## After v1.0 (ideas, not scheduled)
 - Detailed design phase: attribute-level dimension design, SCD strategy per attribute, source-to-target mapping.
-- Generate starter DDL (dbt models / SQL) from the bus matrix and bubble diagrams.
+- Generate dbt models and load (ETL/ELT) templates from the physical model; SQL DDL is done (#53).
 - Import from existing warehouse metadata (information_schema, dbt manifest).
 - Multi-user collaboration on one project file.

@@ -8,6 +8,7 @@ import {
   GUIDANCE,
   INTERVIEW_QUESTIONS,
   PHASES,
+  SQL_DIALECTS,
   STAKEHOLDER_TYPES,
   ProjectParseError,
   bubbleToMermaid,
@@ -17,13 +18,17 @@ import {
   busMatrixToMarkdown,
   countBySeverity,
   createProject,
+  ddlScript,
   displayName,
   isExampleId,
   loadExample,
+  physicalSettings,
   projectSummaryText,
+  prototypeFiles,
   requirementsToMarkdown,
   slugify,
   validateProject,
+  type SqlDialect,
   type ThemeName,
 } from '../core';
 import { readProject, writeFileAtomic, writeProject } from './io';
@@ -59,6 +64,15 @@ Commands
   render <file>      Write deliverables (requirements.md, bus matrix, bubble diagrams)
       --out <dir>        Output folder (default: <file folder>/out)
       --theme <name>     light (default) or dark
+  ddl <file>         Print the CREATE TABLE script with keys and index advice
+      --dialect <name>   postgres (default), sqlserver or snowflake
+      --out <file>       Write to a file instead
+      --drop             Start with DROP TABLE IF EXISTS
+  prototype <file>   Write the prototype: Docker sandbox, scripts, sample data, CSV
+      --out <dir>        Output folder (default: <file folder>/prototype)
+      --dialect <name>   Target platform for schema.sql
+      --seed <n>         Seed for the sample data
+      --rows <n>         Sample rows per fact table
   serve [file]       Open the guided UI on the project file with live sync
       --port <n>         Port (default ${DEFAULT_PORT})
       --open             Open the browser
@@ -84,6 +98,10 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
         theme: { type: 'string' },
         port: { type: 'string' },
         open: { type: 'boolean' },
+        dialect: { type: 'string' },
+        drop: { type: 'boolean' },
+        seed: { type: 'string' },
+        rows: { type: 'string' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
       },
@@ -105,6 +123,19 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
 
   const file = resolve(io.cwd, fileArg ?? DEFAULT_FILE);
   const rel = (p: string) => relative(io.cwd, p) || '.';
+
+  const dialectOption = (fallback: SqlDialect): SqlDialect => {
+    if (!opts.dialect) return fallback;
+    const match = SQL_DIALECTS.find((d) => d.value === opts.dialect || d.label.toLowerCase() === opts.dialect!.toLowerCase());
+    if (!match) throw new CliError(`Unknown dialect "${opts.dialect}". Choose one of: ${SQL_DIALECTS.map((d) => d.value).join(', ')}.`);
+    return match.value;
+  };
+  const positiveInt = (name: string, value: string | undefined): number | undefined => {
+    if (value === undefined) return undefined;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) throw new CliError(`--${name} must be a whole number, got "${value}".`);
+    return n;
+  };
 
   const load = async () => {
     if (!existsSync(file)) throw new CliError(`No project file at ${rel(file)}. Create one with "kimball init ${rel(file)}".`);
@@ -179,15 +210,52 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
         return 0;
       }
 
+      case 'ddl': {
+        const project = await load();
+        const sql = ddlScript(project, { dialect: dialectOption(physicalSettings(project).dialect), dropFirst: opts.drop });
+        if (opts.out) {
+          const target = resolve(io.cwd, opts.out);
+          await writeFileAtomic(target, sql);
+          io.out(`Wrote ${rel(target)}.\n`);
+        } else {
+          io.out(sql);
+        }
+        return 0;
+      }
+
+      case 'prototype': {
+        const project = await load();
+        const base = physicalSettings(project);
+        const seed = positiveInt('seed', opts.seed);
+        const rows = positiveInt('rows', opts.rows);
+        const settings = {
+          ...base,
+          dialect: dialectOption(base.dialect),
+          seed: seed ?? base.seed,
+          rows: { ...base.rows },
+        };
+        if (rows !== undefined) {
+          if (rows < 1) throw new CliError('--rows must be at least 1.');
+          for (const p of project.processes) settings.rows[p.id] = Math.min(rows, 100_000);
+        }
+        const outDir = resolve(io.cwd, opts.out ?? join(file, '..', 'prototype'));
+        const files = prototypeFiles(project, settings);
+        for (const f of files) await writeFileAtomic(join(outDir, f.name), f.data);
+        io.out(`Wrote the prototype (${files.length} files) to ${rel(outDir)}.\n`);
+        io.out(`Start the PostgreSQL sandbox (needs Docker):\n  cd ${rel(outDir)}\n  docker compose up -d\n  docker compose exec db psql -U kimball -d kimball\n`);
+        io.out(`schema.sql is for ${SQL_DIALECTS.find((d) => d.value === settings.dialect)!.label}; index advice is in index-recommendations.md.\n`);
+        return 0;
+      }
+
       case 'serve': {
+        const port = opts.port ? Number(opts.port) : DEFAULT_PORT;
+        if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError(`Invalid port "${opts.port}".`);
         if (!existsSync(file)) {
           await writeProject(file, createProject(opts.name ?? ''));
           io.out(`Created ${rel(file)}.\n`);
         } else {
           await readProject(file); // fail fast on a broken file
         }
-        const port = opts.port ? Number(opts.port) : DEFAULT_PORT;
-        if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError(`Invalid port "${opts.port}".`);
         const server = await startServer({
           file,
           port,

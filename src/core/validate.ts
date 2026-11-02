@@ -180,7 +180,14 @@ export function validateProject(project: KimballProject): Finding[] {
         });
       }
       if (p.factTableType === 'accumulating-snapshot') {
-        const roles = dateUsages.reduce((sum, u) => sum + Math.max(1, u.roles.length), 0);
+        // Count distinct roles per date dimension, so a dimension listed twice without roles is still one.
+        const roleSets = new Map<string, Set<string>>();
+        for (const u of dateUsages) {
+          const set = roleSets.get(u.dimensionId) ?? new Set<string>();
+          for (const r of u.roles.length ? u.roles : ['']) set.add(r.trim().toLowerCase());
+          roleSets.set(u.dimensionId, set);
+        }
+        const roles = [...roleSets.values()].reduce((sum, set) => sum + set.size, 0);
         if (roles < 2) {
           add({
             code: 'KD203',

@@ -27,9 +27,9 @@ flowchart LR
 
 | Component | Path | Runtime | Responsibility |
 |---|---|---|---|
-| **Core engine** | `src/core/` | Pure TS (browser + Node) | Types, factories, normalisation, JSON Schema, validation rules, phase status, bus matrix derivation, bubble layout, exporters (Markdown, CSV, HTML, SVG, Mermaid), coach guidance and help content (one source for the Help page, `docs/USER-GUIDE.md` and the skill reference), example projects, zip writer |
+| **Core engine** | `src/core/` | Pure TS (browser + Node) | Types, factories, normalisation, JSON Schema, validation rules, phase status, bus matrix derivation, bubble layout, exporters (Markdown, CSV, HTML, SVG, Mermaid), physical star schema, DDL and index advice, seeded sample data, star-join query engine, prototype bundle, coach guidance and help content (one source for the Help page, `docs/USER-GUIDE.md` and the skill reference), example projects, zip writer |
 | **Guided UI** | `src/app/` | Browser (React 19) | Phase stepper, editors for each phase, coach panel, bubble diagram & bus matrix views, review/export, persistence & sync |
-| **CLI** | `src/cli/` | Node ≥ 18 | `init`, `validate`, `summary`, `render`, `serve` |
+| **CLI** | `src/cli/` | Node ≥ 18 | `init`, `validate`, `summary`, `render`, `ddl`, `prototype`, `serve` |
 | **Sync server** | `src/cli/server.ts` | Node ≥ 18 | Serves the single-file UI and a small JSON API for the project file |
 | **Skill** | `plugin/skills/kimball-designer/` | Claude | `SKILL.md` workflow, `references/`, `examples/`, `schema/`, plus the **built** `scripts/kimball.mjs` and `ui/index.html` |
 
@@ -53,10 +53,14 @@ KimballProject
 ├── requirements[]: id, statement, kpis[], priority, stakeholderIds[], processIds[]
 ├── processes[]: id, name, description, owner, sourceSystems[], grain, factTableType,
 │                businessValue, feasibility, facts[], dimensions[] (dimensionId + roles[])
-├── dimensions[]: id, name, kind, description, attributes[] (name, description, scdType), hierarchies[]
+├── dimensions[]: id, name, kind, description, attributes[] (name, description, scdType,
+│                 optional dataType, businessKey, sampleValues), hierarchies[]
 ├── assumptions[]: id, text
-└── openQuestions[]: id, text, owner, status
+├── openQuestions[]: id, text, owner, status
+└── physical?: dialect, seed, dateFrom, dateTo, rows{id → n}   (prototype settings; facts may add dataType, sampleRange)
 ```
+
+The physical star schema, the CREATE TABLE scripts and the sample data are **derived** too (`physicalModel`, `ddlScript`, `generateSampleData`): the same file and seed always give the same tables and rows.
 
 The bus matrix and the bubble diagrams are **derived** from `processes[].dimensions[]` — there is no separate matrix to keep in sync.
 

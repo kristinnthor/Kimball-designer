@@ -12,7 +12,8 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-export function pushToast(message: string, tone: Toast['tone'] = 'info', action?: Toast['action'], ttl = 5000) {
+/** Errors stay until dismissed; everything else fades after five seconds. */
+export function pushToast(message: string, tone: Toast['tone'] = 'info', action?: Toast['action'], ttl = tone === 'error' ? 0 : 5000) {
   const toast = { id: nextId++, message, tone, action };
   toasts = [...toasts, toast].slice(-4);
   emit();

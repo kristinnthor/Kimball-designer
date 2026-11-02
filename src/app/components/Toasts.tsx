@@ -5,7 +5,7 @@ export function Toasts() {
   return (
     <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast ${t.tone}`}>
+        <div key={t.id} className={`toast ${t.tone}`} role={t.tone === 'error' ? 'alert' : undefined}>
           <span style={{ flex: 1 }}>{t.message}</span>
           {t.action && (
             <button

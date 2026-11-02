@@ -4,8 +4,9 @@ import { BubbleDiagram } from '../components/BubbleDiagram';
 import { IconCopy, IconDownload } from '../components/icons';
 import { PhaseFrame } from '../components/PhaseFrame';
 import { EmptyState } from '../components/ui';
-import { copyText, downloadBlob, downloadText, svgToPng } from '../lib/files';
+import { copyWithToast, downloadBlob, downloadText, svgToPng } from '../lib/files';
 import { useResolvedTheme } from '../lib/theme';
+import { markAdded } from '../lib/justAdded';
 import { goToPhase } from '../store/routing';
 import { useProject } from '../store/store';
 import { pushToast } from '../store/toasts';
@@ -49,7 +50,11 @@ export function BubblesPhase() {
         </div>
       )}
 
-      <BubbleDiagram project={project} process={process} theme={theme} onDimensionClick={() => goToPhase('dimensions')} />
+      <BubbleDiagram project={project} process={process} theme={theme} onDimensionClick={(id) => {
+          markAdded(id);
+          goToPhase('dimensions');
+        }}
+      />
 
       <div className="row" style={{ marginTop: 16 }}>
         <button type="button" className="btn" onClick={() => downloadText(`${name}.svg`, bubbleToSvg(project, process), 'image/svg+xml')}>
@@ -69,8 +74,8 @@ export function BubblesPhase() {
         <button
           type="button"
           className="btn"
-          onClick={async () =>
-            pushToast((await copyText('```mermaid\n' + bubbleToMermaid(project, process) + '```\n')) ? 'Mermaid copied to the clipboard.' : 'Copy failed.', 'success')
+          onClick={() =>
+            void copyWithToast('```mermaid\n' + bubbleToMermaid(project, process) + '```\n', 'Mermaid copied to the clipboard.')
           }
         >
           <IconCopy /> Copy Mermaid
