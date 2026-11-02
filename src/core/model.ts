@@ -38,6 +38,7 @@ export type QuestionStatus = 'open' | 'answered';
 /** Logical column type for the physical design; mapped to each SQL dialect's types. */
 export type DataType = 'text' | 'integer' | 'decimal' | 'date' | 'boolean';
 export type SqlDialect = 'postgres' | 'sqlserver' | 'snowflake';
+export type Aggregate = 'sum' | 'avg' | 'min' | 'max' | 'count';
 
 export interface ProjectMeta {
   id: Id;
@@ -71,6 +72,33 @@ export interface Requirement {
   stakeholderIds: Id[];
   processIds: Id[];
   notes: string;
+  /** The prototype question that answers it; absent until one is saved. */
+  query?: RequirementQuery;
+}
+
+/**
+ * A dimension column in a saved query, in design terms (ids and role names, not
+ * table and column names), so the query survives renames.
+ */
+export interface QueryColumn {
+  dimensionId: Id;
+  /** Role of a role-playing dimension, e.g. "Order date". Absent for a single, unnamed role. */
+  role?: string;
+  /** The dimension attribute. */
+  attributeId?: Id;
+  /** A column the prototype adds that isn't an attribute in the design, e.g. month_name or full_date. */
+  column?: string;
+  // With neither attributeId nor column, it is a degenerate dimension (a column of the fact table).
+}
+
+/** A question asked of the prototype: a measure of one business process, grouped and filtered by dimension columns. */
+export interface RequirementQuery {
+  processId: Id;
+  /** The measure; absent when the query counts rows. */
+  measureId?: Id;
+  aggregate: Aggregate;
+  groupBy: QueryColumn[];
+  filter?: { column: QueryColumn; value: string };
 }
 
 export interface Measure {

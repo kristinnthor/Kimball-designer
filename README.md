@@ -89,7 +89,7 @@ Then ask Claude something like *"Help me gather requirements for a sales data wa
 
 1. Finds or creates `kimball/project.kimball.json` and offers to open the guided UI with live sync.
 2. Coaches you phase by phase, asking at most three questions at a time and recording your answers. It never makes up business facts; unknowns become open questions.
-3. Validates the model against 16 Kimball rules (`kimball validate`).
+3. Validates the model against 18 Kimball rules (`kimball validate`).
 4. Renders the deliverables (`kimball render`) and hands off: the bus matrix, the conformed dimensions, which process to build first, and the blocking questions.
 
 **Use the CLI directly** (Node ≥ 18, no install needed):

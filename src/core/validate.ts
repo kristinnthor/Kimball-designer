@@ -5,6 +5,8 @@ import {
   type KimballProject,
   type PhaseId,
 } from './model';
+import { physicalModel } from './physical';
+import { requirementAnswers } from './traceability';
 
 export type Severity = 'error' | 'warning' | 'info';
 
@@ -40,11 +42,13 @@ export const RULES: RuleInfo[] = [
   { code: 'KD106', severity: 'warning', title: 'Every requirement is linked to a process' },
   { code: 'KD107', severity: 'warning', title: 'Names are unique' },
   { code: 'KD108', severity: 'warning', title: 'Every process has a date dimension' },
+  { code: 'KD109', severity: 'warning', title: 'Saved requirement queries match the design' },
   { code: 'KD201', severity: 'info', title: 'Grain is phrased "One row per …"' },
   { code: 'KD202', severity: 'info', title: 'Dimension is used by a single process' },
   { code: 'KD203', severity: 'info', title: 'Accumulating snapshots have several date roles' },
   { code: 'KD204', severity: 'info', title: 'Planned interviews are not done yet' },
   { code: 'KD205', severity: 'info', title: 'Process has no value/feasibility score' },
+  { code: 'KD206', severity: 'info', title: 'Must-have requirements are answered by a query' },
 ];
 
 export const GRAIN_PATTERN = /\b(one|a single|each)\s+(row|record|line)\s+(per|for each|for every|for)\b/i;
@@ -270,6 +274,32 @@ export function validateProject(project: KimballProject): Finding[] {
         phase: 'processes',
         target: { kind: 'requirement', id: r.id },
       });
+    }
+  }
+
+  // KD109 / KD206 — requirements answered by a prototype query
+  if (requirements.some((r) => r.query)) {
+    for (const a of requirementAnswers(project, physicalModel(project))) {
+      const r = a.requirement;
+      if (a.status === 'outdated') {
+        add({
+          code: 'KD109',
+          severity: 'warning',
+          message: `The query that answers "${short(r.statement)}" no longer matches the design.`,
+          hint: 'A process, measure, dimension role or attribute it uses was changed or removed. Build the question again in the Prototype explorer and save it.',
+          phase: 'prototype',
+          target: { kind: 'requirement', id: r.id },
+        });
+      } else if (a.status === 'unanswered' && r.priority === 'must' && r.statement.trim()) {
+        add({
+          code: 'KD206',
+          severity: 'info',
+          message: `Must-have requirement "${short(r.statement)}" isn't answered by a prototype query yet.`,
+          hint: "Build the question in the Prototype explorer and save it as the answer. If you can't, the design is missing a dimension, an attribute or a fact.",
+          phase: 'prototype',
+          target: { kind: 'requirement', id: r.id },
+        });
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import type { Additivity, SqlDialect } from './model';
+import type { Additivity, Aggregate, SqlDialect } from './model';
 import type { PhysicalColumn, PhysicalModel, PhysicalTable } from './physical';
 import { sqlLiteral, type Cell, type SampleDataset } from './sampledata';
 
@@ -7,8 +7,6 @@ import { sqlLiteral, type Cell, type SampleDataset } from './sampledata';
  * measure and up to two dimension attributes to group by, and see the result
  * plus the SQL that would compute it in the warehouse.
  */
-
-export type Aggregate = 'sum' | 'avg' | 'min' | 'max' | 'count';
 
 export const AGGREGATES: { value: Aggregate; label: string }[] = [
   { value: 'sum', label: 'Sum' },

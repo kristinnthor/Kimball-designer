@@ -1747,6 +1747,16 @@ pre.summary {
   gap: var(--kd-space-3);
 }
 
+table.coverage td {
+  vertical-align: top;
+}
+
+.coverage-actions {
+  flex-wrap: nowrap;
+  gap: var(--kd-space-2);
+  white-space: nowrap;
+}
+
 table.data th.num,
 table.data td.num {
   text-align: right;

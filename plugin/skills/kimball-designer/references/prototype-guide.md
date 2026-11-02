@@ -13,7 +13,7 @@ The prototype turns the agreed high-level design into a **physical star schema w
 | `schema.sql` | DDL for the chosen dialect (the target platform) |
 | `data.<dialect>.sql` | INSERTs for the chosen dialect when it isn't PostgreSQL |
 | `index-recommendations.md` | Keys and indexes, now and later, with the reason for each |
-| `queries.sql` | One example star-join query per fact table, plus one by period |
+| `queries.sql` | The saved query for each answered requirement, then one example star-join query per fact table, plus one by period |
 | `data/*.csv` | Every table's sample rows (UTF-8 with BOM) |
 
 `$KD ddl <file> [--dialect …] [--drop] [--out file]` prints or writes just the CREATE TABLE script.
@@ -42,8 +42,9 @@ Explain the *why* in one line when you hand it over; the reasons are in the scri
 1. **Confirm the design is ready.** `$KD summary <file>` shows "N of M fact tables ready to build" for phase 11. A process needs a grain, at least one dimension, and facts (or `factTableType: "factless"`).
 2. **Make the data look like the business.** Propose, per dimension, which attribute is the business key, data types where the name is ambiguous, and **5–15 realistic sample values** per descriptive attribute (category names, regions, plan names). Sample values are *example data*, not business facts, but they should be plausible for the user's domain: say they are suggestions and record them only after the user agrees. Use the user's language and terminology. Keep hierarchies consistent (each brand in one category).
 3. **Record** them in the project file: `attributes[].sampleValues`, `businessKey`, `dataType`, and `facts[].sampleRange` (`[min, max]`) for measures with a known range. Optionally set `physical` (dialect, dates, seed, row counts).
-4. **Generate**: `$KD prototype <file> --out kimball/prototype`. If Docker is available and the user agrees, run `docker compose up -d` in that folder, then answer two or three of the must-have requirements with SQL through `docker compose exec -T db psql -U kimball -d kimball -c "<query>"` and show the results.
-5. **Hand over**: the path to `schema.sql` for their platform, the three most important index recommendations, and what to review before the real build (data types, text lengths, business keys, an *Unknown* row per dimension).
+4. **Answer the requirements.** For each must-have requirement, propose the question that answers it, in words: the business process, the measure and how to aggregate it (sum for additive facts; average, minimum or maximum for semi- and non-additive ones, or group a balance by date), up to two dimension attributes to group by (with the role for role-playing dimensions) and at most one filter. Record it as `requirements[].query` after the user agrees (shape in `schema-guide.md`), then run `$KD validate <file>`: KD109 flags a query that doesn't match the design, KD206 lists must-haves still unanswered. If no query can answer a must-have, say what is missing (a dimension, an attribute or a fact): that is a gap in the design, which is the point of the prototype.
+5. **Generate**: `$KD prototype <file> --out kimball/prototype`. `queries.sql` starts with the SQL for each answered requirement. If Docker is available and the user agrees, run `docker compose up -d` in that folder, then run those queries through `docker compose exec -T db psql -U kimball -d kimball -c "<query>"` and show the results.
+6. **Hand over**: the path to `schema.sql` for their platform, the three most important index recommendations, and what to review before the real build (data types, text lengths, business keys, an *Unknown* row per dimension).
 
 ## Rules
 

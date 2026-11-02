@@ -154,7 +154,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     contains: [
       'Overview: purpose, sponsor, scope in and out, success criteria.',
       'Stakeholders and interview status.',
-      'Business requirements with priority, KPIs, who raised them and which processes answer them.',
+      'Business requirements with priority, KPIs, who raised them, which processes answer them and, once you use the prototype, the query that answers each one.',
       'Each business process with grain, fact table type, dimensions, facts and its bubble diagram.',
       'The dimension catalogue with kinds, key attributes, hierarchies and where each is used.',
       'The bus matrix, the prioritisation, assumptions and open questions.',
@@ -177,7 +177,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     id: 'review',
     title: 'Validation report',
     formats: 'In the UI, `kimball validate` (text or `--json`)',
-    summary: 'The model checked against 16 Kimball best-practice rules, each with a hint on how to fix it.',
+    summary: 'The model checked against 18 Kimball best-practice rules, each with a hint on how to fix it.',
     contains: ['Errors (broken references, missing names), warnings (no grain, no date dimension, unused dimensions) and notes.', 'A link from each finding to the phase where you fix it.'],
     usedBy: 'Whoever runs the process, before sharing anything.',
     why: 'It catches the classic mistakes early: processes without a grain, facts without dimensions, dimensions nobody shares.',
@@ -211,6 +211,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
     contains: [
       'One table per dimension (surrogate key, business key, type 2 history columns) and one per business process (a key per dimension role, the facts).',
       'Sample rows you can group and filter in the browser, with the matching SQL.',
+      'The question that answers each requirement, saved with it: the requirements document shows it and `queries.sql` gets its SQL.',
       'CREATE TABLE scripts for PostgreSQL, SQL Server or Snowflake, with keys and indexes, and recommendations for later (columnstore, BRIN, partitioning, clustering).',
       'A Docker Compose sandbox that loads the tables and data on first start.',
     ],
@@ -235,7 +236,7 @@ export const HELP_DELIVERABLES: HelpDeliverable[] = [
 export const HELP_NEXT_STEPS: string[] = [
   'Build the conformed dimensions first: the columns with the most marks in the bus matrix.',
   'Pick the top process on the prioritisation grid and do its detailed design: every attribute, slowly changing dimension strategy and source-to-target mapping.',
-  'Try it in phase 11 *Prototype* first: query the sample data, check each must-have requirement can be answered, and start from the generated CREATE TABLE script.',
+  'Try it in phase 11 *Prototype* first: query the sample data, save the question that answers each must-have requirement, and start from the generated CREATE TABLE script.',
   'Build and release that one process end to end, then the next row of the matrix.',
   'Keep the project file in your repository and update it when scope changes, so the diagrams stay current.',
 ];
@@ -310,8 +311,8 @@ export const HELP_PHASES: Record<PhaseId, HelpPhase> = {
     doneWhen: 'There are no errors or warnings.',
   },
   prototype: {
-    youDo: 'Explore the design as tables filled with sample data, then download the CREATE TABLE script, index advice and a Docker sandbox.',
-    youRecord: 'Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values.',
+    youDo: 'Explore the design as tables filled with sample data, save the question that answers each requirement, then download the CREATE TABLE script, index advice and a Docker sandbox.',
+    youRecord: 'The query that answers each requirement. Optional: the SQL dialect, sample row counts and dates, and per attribute a data type, business key and sample values.',
     doneWhen: 'Every process has a grain, dimensions and facts, so it can be built as a table.',
   },
 };

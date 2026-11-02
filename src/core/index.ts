@@ -17,3 +17,4 @@ export * from './ddl';
 export * from './sampledata';
 export * from './explore';
 export * from './prototype';
+export * from './traceability';

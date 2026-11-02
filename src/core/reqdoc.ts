@@ -17,6 +17,7 @@ import {
 import { bubbleToMermaid } from './bubble';
 import { busMatrixToMarkdown } from './busMatrix';
 import { countBySeverity, validateProject } from './validate';
+import { requirementAnswers } from './traceability';
 import { mdCell, mdCode, mdInline } from './text';
 
 const dash = (s: string) => (s.trim() ? mdCell(s) : '—');
@@ -66,12 +67,29 @@ export function requirementsToMarkdown(project: KimballProject, now: string = ne
   h('## 3. Business requirements');
   if (requirements.length === 0) out.push('_No requirements recorded._');
   else {
-    out.push('| # | Requirement | Priority | KPIs | Raised by | Business processes |', '|---|---|---|---|---|---|');
+    // The "Answered by" column appears once a prototype query answers any requirement.
+    const answers = requirements.some((r) => r.query) ? requirementAnswers(project) : null;
+    const answeredBy = (i: number) => {
+      const a = answers?.[i];
+      if (!a?.description) return '—';
+      return a.status === 'outdated' ? `${mdCell(a.description)} _(no longer matches the design)_` : mdCell(a.description);
+    };
+    out.push(
+      `| # | Requirement | Priority | KPIs | Raised by | Business processes |${answers ? ' Answered by |' : ''}`,
+      `|---|---|---|---|---|---|${answers ? '---|' : ''}`,
+    );
     requirements.forEach((r, i) => {
       out.push(
-        `| R${i + 1} | ${dash(r.statement)} | ${optionLabel(PRIORITIES, r.priority)} | ${dash(r.kpis.join(', '))} | ${dash(r.stakeholderIds.map(stakeholderName).join(', '))} | ${dash(r.processIds.map(processName).join(', '))} |`,
+        `| R${i + 1} | ${dash(r.statement)} | ${optionLabel(PRIORITIES, r.priority)} | ${dash(r.kpis.join(', '))} | ${dash(r.stakeholderIds.map(stakeholderName).join(', '))} | ${dash(r.processIds.map(processName).join(', '))} |${answers ? ` ${answeredBy(i)} |` : ''}`,
       );
     });
+    if (answers) {
+      const must = answers.filter((a) => a.requirement.priority === 'must');
+      out.push(
+        '',
+        `_Answered by_ is the prototype query that shows the design answers the requirement. ${must.filter((a) => a.status === 'answered').length} of ${must.length} must-have requirements are answered; the SQL is in the prototype's \`queries.sql\`.`,
+      );
+    }
   }
 
   // 4 Business processes

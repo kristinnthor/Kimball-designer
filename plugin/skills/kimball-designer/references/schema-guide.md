@@ -48,6 +48,14 @@ The project file is the single source of truth. The bus matrix and bubble diagra
 ```
 - `priority`: `must` · `should` · `could` · `wont`
 - `processIds` links the requirement to the processes that answer it (traceability). Set it in the processes phase.
+- Optional `query` (phase 11): the prototype question that answers it, in design terms so it survives renames:
+  ```json
+  "query": { "processId": "bp_retail_sales", "measureId": "ms_net_sales", "aggregate": "sum",
+    "groupBy": [{ "dimensionId": "dm_product", "attributeId": "at_prod_category" },
+                { "dimensionId": "dm_date", "role": "Order date", "attributeId": "at_date_month" }],
+    "filter": { "column": { "dimensionId": "dm_store", "attributeId": "at_store_region" }, "value": "North" } }
+  ```
+  `aggregate`: `sum` · `avg` · `min` · `max` · `count` (no `measureId`). `groupBy`: at most two columns. A column is a `dimensionId`, the `role` exactly as in the process's usage (omit for an unnamed role), and the `attributeId`; for a column the prototype adds (e.g. `month_name` in a calendar without attributes, `full_date`) use `"column": "<name>"` instead; for a degenerate dimension give only the `dimensionId`. `filter` is optional, one column equal to a value.
 
 ### Business process
 ```json
@@ -133,6 +141,8 @@ Always **re-read the file first** (the user may have edited it in the UI), make 
 **Move the UI to a phase** — set `meta.currentPhase`.
 
 **Make the prototype data realistic** — on each agreed attribute add `"sampleValues": [...]` (and `"businessKey": true` on the source identifier), then run `$KD prototype <file>`.
+
+**Record the query that answers a requirement** — set `requirements[i].query` (shape above) after the user agrees, make sure its process is in `processIds`, then run `$KD validate <file>`: KD109 means an id or role doesn't match the design.
 
 ## Tolerant loading
 
