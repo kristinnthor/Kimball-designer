@@ -3433,7 +3433,7 @@ var GUIDANCE = {
       "Ask Claude to suggest realistic sample values for the attributes, so the data looks like your business.",
       "Group a semi-additive fact (a balance) by date, or average it; the explorer warns when a sum would be wrong.",
       "Download the sandbox bundle and run docker compose up -d to query the same tables with any SQL tool.",
-      "Building with dbt? The dbt project has a model per table, the tests and the sample rows as seeds: dbt seed, dbt run and dbt test work against the sandbox.",
+      "Building with dbt? The dbt project has a model per table, the tests and the sample rows as seeds. With PostgreSQL, dbt seed, dbt run and dbt test work against the sandbox as they are.",
       "Treat the script as a starting point: review data types, text lengths and business keys before you build."
     ],
     pitfalls: [
@@ -3863,7 +3863,7 @@ var dbtSeedName = (table) => `sample_${table}`;
 function escapeJinja(text) {
   return text.replace(/\{[{%#]/g, (m) => `{{ '${m}' }}`);
 }
-var oneLine = (text) => escapeJinja(text.replace(/\s+/g, " ").trim());
+var oneLine = (text) => escapeJinja(text.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, " ").trim());
 function tableDescription(t) {
   if (t.kind === "fact") {
     const type = optionLabel(FACT_TABLE_TYPES, t.factTableType ?? null);
@@ -3902,7 +3902,7 @@ function dbtModels(model) {
     columns: t.columns.map((c) => ({ name: c.name, description: oneLine(c.note), tests: columnTests(t, c) }))
   }));
 }
-var q = (s) => JSON.stringify(s);
+var q = (s) => JSON.stringify(s).replace(/[\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 function modelSql(m) {
   const t = m.table;
   const lines = [`-- ${m.name}: ${oneLine(t.label)}`];
@@ -3922,8 +3922,10 @@ function modelSql(m) {
   } else {
     if (t.scd2) {
       lines.push(
-        "-- Type 2 history: take the versions from a dbt snapshot of the source (dbt_valid_from is",
-        "-- row_effective_date, dbt_valid_to is row_expiration_date; the current version has no end date)."
+        "-- Type 2 history: take the versions from a dbt snapshot of the source. row_effective_date is",
+        "-- dbt_valid_from as a date. dbt_valid_to is when the next version starts and null for the",
+        "-- current one, so row_expiration_date is the day before it (9999-12-31 while current) and",
+        "-- is_current_row is true where dbt_valid_to is null."
       );
     }
     lines.push("-- Add an Unknown row (for example key -1) for facts that arrive without a match.");
@@ -3959,7 +3961,8 @@ function projectYml(project, name, models, dialect) {
     `name: ${q(name)}`,
     'version: "1.0.0"',
     "config-version: 2",
-    'require-dbt-version: ">=1.10.0"',
+    // Generic tests take their arguments under `arguments:` by default from 1.10.8.
+    'require-dbt-version: ">=1.10.8"',
     `profile: ${q(name)}`,
     "",
     'model-paths: ["models"]',
@@ -3990,7 +3993,7 @@ function profilesYml(name, dialect) {
       ...head,
       "  target: sandbox",
       "  outputs:",
-      "    # The Docker sandbox of the prototype bundle (docker compose up -d in the folder above).",
+      "    # The Docker sandbox of the prototype bundle (docker compose up -d in the bundle's folder).",
       "    sandbox:",
       "      type: postgres",
       '      host: "127.0.0.1"',
@@ -4003,7 +4006,7 @@ function profilesYml(name, dialect) {
       ""
     ].join("\n");
   }
-  const env = (v) => q(`{{ env_var('${v}') }}`);
+  const env = (v, fallback) => q(`{{ env_var('${v}'${fallback === void 0 ? "" : `, '${fallback}'`}) }}`);
   const outputs = dialect === "sqlserver" ? [
     "      type: sqlserver",
     '      driver: "ODBC Driver 18 for SQL Server"',
@@ -4020,25 +4023,27 @@ function profilesYml(name, dialect) {
     "      type: snowflake",
     `      account: ${env("SNOWFLAKE_ACCOUNT")}`,
     `      user: ${env("SNOWFLAKE_USER")}`,
-    `      password: ${env("SNOWFLAKE_PASSWORD")}`,
+    "      # Key-pair sign-in: Snowflake is ending sign-ins with only a password.",
+    `      private_key_path: ${env("SNOWFLAKE_PRIVATE_KEY_PATH")}`,
+    `      private_key_passphrase: ${env("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE", "")}`,
     `      role: ${env("SNOWFLAKE_ROLE")}`,
     `      warehouse: ${env("SNOWFLAKE_WAREHOUSE")}`,
     `      database: ${env("SNOWFLAKE_DATABASE")}`,
     "      schema: analytics",
     "      threads: 4"
   ];
-  return [...head, "  target: dev", "  outputs:", "    # Fill in the environment variables; never write passwords into this file.", "    dev:", ...outputs, ""].join("\n");
+  return [...head, "  target: dev", "  outputs:", "    # Set the environment variables; never write passwords or keys into this file.", "    dev:", ...outputs, ""].join("\n");
 }
 function readme(project, name, dialect, analyses) {
   const adapter = { postgres: "dbt-postgres", sqlserver: "dbt-sqlserver", snowflake: "dbt-snowflake" }[dialect];
-  const where = dialect === "postgres" ? `It runs against the Docker sandbox of the prototype bundle: start it first with \`docker compose up -d\` in the folder above (PostgreSQL on 127.0.0.1:${SANDBOX_PORT}). dbt writes to the \`analytics\` schema.` : `\`profiles.yml\` reads the connection from environment variables; set them first. For the Docker sandbox, choose PostgreSQL in the prototype settings and generate the project again.`;
+  const where = dialect === "postgres" ? `It runs against the Docker sandbox of the prototype bundle (PostgreSQL on 127.0.0.1:${SANDBOX_PORT}): start it first with \`docker compose up -d\` in the bundle's folder. dbt writes to the \`analytics\` schema.` : `\`profiles.yml\` reads the connection from environment variables; set them first. For the Docker sandbox, choose PostgreSQL in the prototype settings and generate the project again.`;
   return `# ${displayName(project.meta, "Untitled project")}: dbt project
 
 Generated by Kimball Designer ${APP_VERSION} for ${optionLabel(SQL_DIALECTS, dialect)}. The models and tests follow your design; the seeds are **made-up sample rows**, so you can run the whole project before any source is connected.
 
 ## Run it
 
-You need Python and dbt 1.10 or later with the ${adapter} adapter (\`pip install ${adapter}\`). ${where}
+You need Python and dbt 1.10.8 or later with the ${adapter} adapter (\`pip install ${adapter}\`). ${where}
 
 \`\`\`bash
 dbt debug          # checks the connection
@@ -4090,9 +4095,13 @@ function dbtProjectFiles(project, settings = physicalSettings(project), model = 
   );
   for (const m of models) {
     const rows = dataset.tables[m.name];
-    if (rows) files.push({ name: `seeds/${m.seed}.csv`, data: tableToCsv(rows).replace(/^﻿/, "") });
+    if (rows) files.push({ name: `seeds/${m.seed}.csv`, data: seedCsv(rows) });
   }
   return files;
+}
+function seedCsv(table) {
+  const cell = (v) => v === null ? "" : typeof v === "string" && /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : String(v);
+  return [table.columns.join(","), ...table.rows.map((r) => r.map(cell).join(","))].join("\r\n") + "\r\n";
 }
 
 // src/core/prototype.ts

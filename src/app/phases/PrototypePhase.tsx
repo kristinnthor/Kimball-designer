@@ -803,9 +803,15 @@ function SqlPanel({ project, model, data, settings }: { project: KimballProject;
         <code>127.0.0.1:5433</code> (database and user <code>kimball</code>). It also contains the script for {dialectLabel}, the index advice and CSV files.
       </p>
       <p className="hint">
-        The dbt project has a model per table with descriptions and tests from the design, and the sample rows as seeds:{' '}
-        <code>dbt seed</code>, <code>dbt run</code> and <code>dbt test</code> work against the sandbox as they are. Its README explains how to
-        swap the seeds for your staging models.
+        The dbt project has a model per table with descriptions and tests from the design, and the sample rows as seeds.{' '}
+        {settings.dialect === 'postgres' ? (
+          <>
+            <code>dbt seed</code>, <code>dbt run</code> and <code>dbt test</code> work against the sandbox as they are.
+          </>
+        ) : (
+          <>Its profile reads the {dialectLabel} connection from environment variables; choose PostgreSQL to run it against the sandbox.</>
+        )}{' '}
+        Its README explains how to swap the seeds for your staging models.
       </p>
     </>
   );

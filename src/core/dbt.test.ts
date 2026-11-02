@@ -3,6 +3,7 @@ import {
   dbtModels,
   dbtProjectFiles,
   escapeJinja,
+  generateSampleData,
   loadExample,
   physicalModel,
   prototypeFiles,
@@ -35,6 +36,26 @@ function expectRegularYaml(text: string) {
     if (value === undefined || /^[a-z]+$/.test(value) || /^\d+$/.test(value)) continue;
     expect(() => JSON.parse(value), line).not.toThrow();
   }
+}
+
+/** RFC 4180 rows: quoted cells may hold commas, quotes and line breaks. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') (cell += '"'), i++;
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') row.push(cell), (cell = '');
+    else if (ch === '\r' && text[i + 1] === '\n') row.push(cell), rows.push(row), (row = []), (cell = ''), i++;
+    else cell += ch;
+  }
+  return rows;
 }
 
 describe('dbt project', () => {
@@ -80,7 +101,17 @@ describe('dbt project', () => {
     const ms = file(dbtProjectFiles(retail('sqlserver')), 'profiles.yml');
     expect(ms).toContain('type: sqlserver');
     expect(ms).toContain(`password: "{{ env_var('DBT_SQLSERVER_PASSWORD') }}"`);
-    expect(file(dbtProjectFiles(retail('snowflake')), 'profiles.yml')).toContain(`account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"`);
+    const sf = file(dbtProjectFiles(retail('snowflake')), 'profiles.yml');
+    expect(sf).toContain(`account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"`);
+    // Snowflake is ending sign-ins with only a password.
+    expect(sf).toContain(`private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"`);
+    expect(sf).toContain(`private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE', '') }}"`);
+    expect(sf).not.toContain('password:');
+  });
+
+  it('needs the dbt version that reads test arguments by default', () => {
+    expect(file(dbtProjectFiles(retail()), 'dbt_project.yml')).toContain('require-dbt-version: ">=1.10.8"');
+    expect(file(dbtProjectFiles(retail()), 'README.md')).toContain('dbt 1.10.8 or later');
   });
 
   it('tests keys, business keys and every fact key against its dimension', () => {
@@ -131,6 +162,29 @@ describe('dbt project', () => {
     expect(analysis).toContain("-- R1 (Must): Growth {{ '{%' }} by %} week?");
     expect(analysis).toContain("= '{{ '{{' }} x }}'");
     expect(analysis).toContain("{{ ref('fact_retail_sales') }}");
+  });
+
+  it('keeps control characters out of the YAML', () => {
+    const p = retail();
+    p.dimensions.find((d) => d.id === 'dm_store')!.description = 'Stores\u007f and\u0085 more\u0007';
+    const yml = file(dbtProjectFiles(p), 'models/marts/_models.yml');
+    expect(yml).toContain('"Stores and more');
+    expect(yml).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+  });
+
+  it('writes seed values as they are, without the spreadsheet formula guard', () => {
+    const p = retail();
+    const region = p.dimensions.find((d) => d.id === 'dm_store')!.attributes.find((a) => a.id === 'at_store_region')!;
+    region.sampleValues = ['+354 555 4873', '-10%', '=North', '@home', 'East, "upper"'];
+    const model = physicalModel(p);
+    const data = generateSampleData(p, model, p.physical!);
+    const table = data.tables.dim_store!;
+    const parsed = parseCsv(file(dbtProjectFiles(p, p.physical, model, data), 'seeds/sample_dim_store.csv'));
+    expect(parsed[0]).toEqual(table.columns);
+    expect(parsed.slice(1)).toEqual(table.rows.map((r) => r.map((v) => (v === null ? '' : String(v)))));
+    const regions = new Set(parsed.slice(1).map((r) => r[table.columns.indexOf('region')]));
+    expect([...regions].some((v) => v.startsWith('+') || v.startsWith('-') || v.startsWith('=') || v.startsWith('@'))).toBe(true);
+    expect([...regions].some((v) => v.startsWith("'"))).toBe(false);
   });
 
   it('writes seeds without a byte-order mark, with the table columns as the header', () => {

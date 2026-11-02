@@ -14,7 +14,7 @@ import {
 import { physicalModel, sqlName, type PhysicalColumn, type PhysicalModel, type PhysicalTable } from './physical';
 import type { PrototypeFile } from './prototype';
 import { SANDBOX_PORT } from './sandbox';
-import { generateSampleData, tableToCsv, type SampleDataset } from './sampledata';
+import { generateSampleData, type Cell, type SampleDataset, type SampleTable } from './sampledata';
 import { requirementAnswers } from './traceability';
 import { APP_VERSION } from './version';
 
@@ -53,8 +53,8 @@ export function escapeJinja(text: string): string {
   return text.replace(/\{[{%#]/g, (m) => `{{ '${m}' }}`);
 }
 
-/** One line of free text for a SQL comment or a description. */
-const oneLine = (text: string) => escapeJinja(text.replace(/\s+/g, ' ').trim());
+/** One line of free text for a SQL comment or a description; YAML parsers reject control characters. */
+const oneLine = (text: string) => escapeJinja(text.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim());
 
 function tableDescription(t: PhysicalTable): string {
   if (t.kind === 'fact') {
@@ -103,8 +103,8 @@ export function dbtModels(model: PhysicalModel): DbtModel[] {
 
 // ─── Files ───
 
-/** YAML scalars as JSON strings: always valid, and never read as yes/no/null. */
-const q = (s: string) => JSON.stringify(s);
+/** YAML scalars as JSON strings: never read as yes/no/null, with the control characters JSON leaves raw escaped. */
+const q = (s: string) => JSON.stringify(s).replace(/[\u007f-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 function modelSql(m: DbtModel): string {
   const t = m.table;
@@ -125,8 +125,10 @@ function modelSql(m: DbtModel): string {
   } else {
     if (t.scd2) {
       lines.push(
-        '-- Type 2 history: take the versions from a dbt snapshot of the source (dbt_valid_from is',
-        '-- row_effective_date, dbt_valid_to is row_expiration_date; the current version has no end date).',
+        '-- Type 2 history: take the versions from a dbt snapshot of the source. row_effective_date is',
+        '-- dbt_valid_from as a date. dbt_valid_to is when the next version starts and null for the',
+        '-- current one, so row_expiration_date is the day before it (9999-12-31 while current) and',
+        '-- is_current_row is true where dbt_valid_to is null.',
       );
     }
     lines.push('-- Add an Unknown row (for example key -1) for facts that arrive without a match.');
@@ -164,7 +166,8 @@ function projectYml(project: KimballProject, name: string, models: DbtModel[], d
     `name: ${q(name)}`,
     'version: "1.0.0"',
     'config-version: 2',
-    'require-dbt-version: ">=1.10.0"',
+    // Generic tests take their arguments under `arguments:` by default from 1.10.8.
+    'require-dbt-version: ">=1.10.8"',
     `profile: ${q(name)}`,
     '',
     'model-paths: ["models"]',
@@ -196,7 +199,7 @@ function profilesYml(name: string, dialect: SqlDialect): string {
       ...head,
       '  target: sandbox',
       '  outputs:',
-      '    # The Docker sandbox of the prototype bundle (docker compose up -d in the folder above).',
+      "    # The Docker sandbox of the prototype bundle (docker compose up -d in the bundle's folder).",
       '    sandbox:',
       '      type: postgres',
       '      host: "127.0.0.1"',
@@ -209,7 +212,7 @@ function profilesYml(name: string, dialect: SqlDialect): string {
       '',
     ].join('\n');
   }
-  const env = (v: string) => q(`{{ env_var('${v}') }}`);
+  const env = (v: string, fallback?: string) => q(`{{ env_var('${v}'${fallback === undefined ? '' : `, '${fallback}'`}) }}`);
   const outputs =
     dialect === 'sqlserver'
       ? [
@@ -229,21 +232,23 @@ function profilesYml(name: string, dialect: SqlDialect): string {
           '      type: snowflake',
           `      account: ${env('SNOWFLAKE_ACCOUNT')}`,
           `      user: ${env('SNOWFLAKE_USER')}`,
-          `      password: ${env('SNOWFLAKE_PASSWORD')}`,
+          '      # Key-pair sign-in: Snowflake is ending sign-ins with only a password.',
+          `      private_key_path: ${env('SNOWFLAKE_PRIVATE_KEY_PATH')}`,
+          `      private_key_passphrase: ${env('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE', '')}`,
           `      role: ${env('SNOWFLAKE_ROLE')}`,
           `      warehouse: ${env('SNOWFLAKE_WAREHOUSE')}`,
           `      database: ${env('SNOWFLAKE_DATABASE')}`,
           '      schema: analytics',
           '      threads: 4',
         ];
-  return [...head, '  target: dev', '  outputs:', '    # Fill in the environment variables; never write passwords into this file.', '    dev:', ...outputs, ''].join('\n');
+  return [...head, '  target: dev', '  outputs:', '    # Set the environment variables; never write passwords or keys into this file.', '    dev:', ...outputs, ''].join('\n');
 }
 
 function readme(project: KimballProject, name: string, dialect: SqlDialect, analyses: number): string {
   const adapter = { postgres: 'dbt-postgres', sqlserver: 'dbt-sqlserver', snowflake: 'dbt-snowflake' }[dialect];
   const where =
     dialect === 'postgres'
-      ? `It runs against the Docker sandbox of the prototype bundle: start it first with \`docker compose up -d\` in the folder above (PostgreSQL on 127.0.0.1:${SANDBOX_PORT}). dbt writes to the \`analytics\` schema.`
+      ? `It runs against the Docker sandbox of the prototype bundle (PostgreSQL on 127.0.0.1:${SANDBOX_PORT}): start it first with \`docker compose up -d\` in the bundle's folder. dbt writes to the \`analytics\` schema.`
       : `\`profiles.yml\` reads the connection from environment variables; set them first. For the Docker sandbox, choose PostgreSQL in the prototype settings and generate the project again.`;
   return `# ${displayName(project.meta, 'Untitled project')}: dbt project
 
@@ -251,7 +256,7 @@ Generated by Kimball Designer ${APP_VERSION} for ${optionLabel(SQL_DIALECTS, dia
 
 ## Run it
 
-You need Python and dbt 1.10 or later with the ${adapter} adapter (\`pip install ${adapter}\`). ${where}
+You need Python and dbt 1.10.8 or later with the ${adapter} adapter (\`pip install ${adapter}\`). ${where}
 
 \`\`\`bash
 dbt debug          # checks the connection
@@ -313,8 +318,16 @@ export function dbtProjectFiles(
   );
   for (const m of models) {
     const rows = dataset.tables[m.name];
-    // dbt reads the header as column names, so no byte-order mark.
-    if (rows) files.push({ name: `seeds/${m.seed}.csv`, data: tableToCsv(rows).replace(/^﻿/, '') });
+    if (rows) files.push({ name: `seeds/${m.seed}.csv`, data: seedCsv(rows) });
   }
   return files;
+}
+
+/**
+ * A seed is data, not a spreadsheet: no byte-order mark (dbt reads the header as column
+ * names) and no formula guard, so "+354 555 4873" loads as it is.
+ */
+function seedCsv(table: SampleTable): string {
+  const cell = (v: Cell) => (v === null ? '' : typeof v === 'string' && /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : String(v));
+  return [table.columns.join(','), ...table.rows.map((r) => r.map(cell).join(','))].join('\r\n') + '\r\n';
 }

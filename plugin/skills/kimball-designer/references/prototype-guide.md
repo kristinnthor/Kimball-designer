@@ -15,7 +15,7 @@ The prototype turns the agreed high-level design into a **physical star schema w
 | `index-recommendations.md` | Keys and indexes, now and later, with the reason for each |
 | `queries.sql` | The saved query for each answered requirement, then one example star-join query per fact table, plus one by period |
 | `data/*.csv` | Every table's sample rows (UTF-8 with BOM) |
-| `dbt/` | A dbt project (dbt 1.10+): `models/marts/<table>.sql` per table reading `seeds/sample_<table>.csv`, `_models.yml` with descriptions and tests, `profiles.yml`, and an analysis per answered requirement |
+| `dbt/` | A dbt project (dbt 1.10.8+): `models/marts/<table>.sql` per table reading `seeds/sample_<table>.csv`, `_models.yml` with descriptions and tests, `profiles.yml`, and an analysis per answered requirement |
 
 `$KD ddl <file> [--dialect …] [--drop] [--out file]` prints or writes just the CREATE TABLE script.
 
