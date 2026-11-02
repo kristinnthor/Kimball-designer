@@ -25,7 +25,7 @@ const readName = () => JSON.parse(readFileSync(file, 'utf8')).meta.name as strin
 
 test('the browser and the project file stay in sync both ways', async ({ page }) => {
   await page.goto(server.url);
-  await expect(page.getByRole('status').filter({ hasText: 'Synced to live.kimball.json' })).toBeVisible();
+  await expect(page.locator('.sync', { hasText: 'Synced to live.kimball.json' })).toBeVisible();
 
   // Browser → file
   await page.getByLabel('Project name').fill('Retail analytics (live)');
@@ -53,7 +53,7 @@ test('the browser and the project file stay in sync both ways', async ({ page })
 
 test('a conflicting edit asks which version to keep', async ({ page }) => {
   await page.goto(server.url);
-  await expect(page.getByRole('status').filter({ hasText: 'Synced' })).toBeVisible();
+  await expect(page.locator('.sync', { hasText: 'Synced' })).toBeVisible();
 
   // Stop the UI from saving immediately by editing, then change the file underneath it.
   await page.getByLabel('Project name').fill('Browser version');

@@ -75,6 +75,8 @@ a {
     'header header header'
     'nav main coach';
   height: 100vh;
+  /* Dynamic viewport height: not cut off behind mobile browser toolbars (iOS Safari). */
+  height: 100dvh;
 }
 
 .app.coach-collapsed {
@@ -141,8 +143,11 @@ a {
   margin-left: auto;
 }
 
+/* Scroll areas are positioned so absolutely positioned children (screen-reader-only labels)
+   stay inside them instead of widening the page. */
 .app-nav {
   grid-area: nav;
+  position: relative;
   overflow-y: auto;
   border-right: 1px solid var(--kd-line);
   background: var(--kd-surface);
@@ -151,6 +156,7 @@ a {
 
 .app-main {
   grid-area: main;
+  position: relative;
   overflow-y: auto;
   scroll-behavior: smooth;
 }
@@ -225,9 +231,80 @@ a {
     padding: var(--kd-space-5) var(--kd-space-4);
   }
 
+  .phase-foot .btn {
+    white-space: normal;
+    text-align: left;
+  }
+
+  /* One row of numbered steps; only the current one shows its title. The others keep it for screen readers.
+     Prefixed with .app-nav to win over the base stepper rules further down. */
+  .app-nav .stepper .stage {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 0;
+  }
+
+  .app-nav .stepper .stage-title {
+    display: none;
+  }
+
+  .app-nav .stepper .step {
+    width: auto;
+    margin-bottom: 0;
+    flex: none;
+    align-items: center;
+  }
+
+  .app-nav .stepper .step:not([aria-current]) .step-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .brand small,
   .header-project .sync-label {
     display: none;
+  }
+
+  /* The header fits a 360 px phone: logo only, icon-only menu, tighter spacing. */
+  .app-header {
+    gap: 6px;
+    padding: 0 var(--kd-space-2);
+  }
+
+  .brand > span {
+    display: none;
+  }
+
+  .header-project {
+    padding-left: 6px;
+    margin-left: 0;
+  }
+
+  .header-project input {
+    min-width: 40px;
+  }
+
+  .header-actions {
+    gap: 2px;
+  }
+
+  .header-actions .btn {
+    padding: 6px;
+  }
+
+  /* Visually hidden but still the button's accessible name. */
+  .menu-trigger-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 
@@ -1144,13 +1221,24 @@ table.data .select {
   margin: 0 auto;
 }
 
-.diagram .kd-dim {
+/* Bubbles are buttons only where clicking opens the dimension (not in Help's sample). */
+.diagram .kd-dim[role='button'] {
   cursor: pointer;
 }
 
-.diagram .kd-dim:hover circle {
+.diagram .kd-dim[role='button']:hover circle {
   filter: brightness(0.96);
   stroke-width: 3;
+}
+
+.diagram .kd-dim:focus {
+  outline: none;
+}
+
+.diagram .kd-dim:focus-visible circle {
+  stroke: var(--kd-dim-strong);
+  stroke-width: 4;
+  stroke-dasharray: none;
 }
 
 .thumbs {

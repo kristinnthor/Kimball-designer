@@ -16,14 +16,23 @@ export function BubbleDiagram({
   theme: ThemeName;
   onDimensionClick?: (dimensionId: string) => void;
 }) {
-  const svg = useMemo(() => bubbleToSvg(project, process, { theme, background: false }), [project, process, theme]);
+  const interactive = !!onDimensionClick;
+  const svg = useMemo(() => bubbleToSvg(project, process, { theme, background: false, interactive }), [project, process, theme, interactive]);
+  const open = (target: EventTarget) => {
+    const id = (target as Element).closest('[data-dimension-id]')?.getAttribute('data-dimension-id');
+    if (id && onDimensionClick) onDimensionClick(id);
+  };
   return (
     <div
       className="diagram"
-      onClick={(e) => {
-        const g = (e.target as Element).closest('[data-dimension-id]');
-        const id = g?.getAttribute('data-dimension-id');
-        if (id && onDimensionClick) onDimensionClick(id);
+      onClick={(e) => open(e.target)}
+      onKeyDown={(e) => {
+        // The bubbles are role="button": Enter and Space open them, like a button.
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (!(e.target as Element).closest('[data-dimension-id]')) return;
+          e.preventDefault();
+          open(e.target);
+        }
       }}
       dangerouslySetInnerHTML={{ __html: svg }}
     />

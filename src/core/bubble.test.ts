@@ -84,3 +84,43 @@ describe('wrapText', () => {
     expect(wrapText('one two three four five six', 7, 2)).toEqual(['one two', 'three…']);
   });
 });
+
+describe('legend and interactivity (review fixes)', () => {
+  // Rough text width at the legend's 11 px font, matching the layout's estimate.
+  const textWidth = (s: string) => s.length * 6;
+
+  it('keeps the legend inside the picture for a process without dimensions', () => {
+    const p = createProject('Empty');
+    const proc = createProcess({ id: 'bp_empty', name: 'Empty' });
+    p.processes.push(proc);
+    for (const showFacts of [true, false]) {
+      const L = layoutBubble(p, proc, { showFacts });
+      expect(L.width - 24, `showFacts ${showFacts}`).toBeGreaterThanOrEqual(24 + 240 + textWidth('Conformed (2+ processes)'));
+      if (showFacts) {
+        // Not enough room on one line: the additivity key moves below the colour key.
+        expect(L.legend.additivityY).toBe(L.legend.keyY + 18);
+        expect(L.legend.additivityY! + 4).toBeLessThanOrEqual(L.height);
+      } else {
+        expect(L.legend.additivityY).toBeNull();
+      }
+    }
+  });
+
+  it('keeps the additivity key on the same line when there is room', () => {
+    const { p, proc } = projectWith(4);
+    const L = layoutBubble(p, proc);
+    expect(L.legend.additivityY).toBe(L.legend.keyY);
+  });
+
+  it('makes bubbles keyboard buttons only when interactive', () => {
+    const { p, proc } = projectWith(3);
+    const exported = bubbleToSvg(p, proc);
+    expect(exported).toContain('role="img"');
+    expect(exported).not.toContain('tabindex');
+    const app = bubbleToSvg(p, proc, { interactive: true });
+    expect(app).toContain('role="group"');
+    expect(app.match(/tabindex="0" role="button" aria-label="Open dimension Dimension number \d"/g)).toHaveLength(3);
+    // Wrapped lines are separated by a space, so the visible text reads "Dimension number 0", as the name does.
+    expect(app).toMatch(/>Dimension<\/tspan> <tspan[^>]*>number 0</);
+  });
+});

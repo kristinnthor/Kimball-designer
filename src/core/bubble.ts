@@ -36,12 +36,18 @@ export interface BubbleLayout {
   panel: { x: number; y: number; width: number; height: number } | null;
   grainLines: string[];
   footerY: number;
+  /** Baselines of the legend: the colour key, and the additivity key (null without a facts panel). */
+  legend: { keyY: number; additivityY: number | null };
 }
 
 export interface BubbleOptions {
   /** Show the facts panel to the right of the diagram (default true). */
   showFacts?: boolean;
 }
+
+/** Approximate widths of the two legend texts at 11 px, so they never overlap or get clipped. */
+const LEGEND_KEY_W = 390;
+const LEGEND_ADDITIVITY_W = 280;
 
 const PAD = 24;
 const TOP = 88;
@@ -69,7 +75,9 @@ export function layoutBubble(project: KimballProject, process: BusinessProcess, 
   const d2 = twoRings ? Math.max(d1 + 2 * r + 10, (outerCount * chord) / (2 * Math.PI)) : d1;
   const extent = n === 0 ? CENTER_R + 40 : (twoRings ? d2 : d1) + r + ROLE_LABEL_SPACE;
   const size = Math.ceil(2 * extent);
-  const cx = PAD + size / 2;
+  // Without the facts panel the picture can be narrower than the legend: centre it in the legend's width.
+  const diagramWidth = showFacts ? size : Math.max(size, LEGEND_KEY_W);
+  const cx = PAD + diagramWidth / 2;
   const cy = TOP + size / 2;
 
   const nodes: BubbleNode[] = [...merged.entries()].map(([dimensionId, roles], i) => {
@@ -98,11 +106,16 @@ export function layoutBubble(project: KimballProject, process: BusinessProcess, 
   const panel = showFacts
     ? { x: PAD + size + 24, y: TOP, width: PANEL_W, height: 56 + factRows * 24 }
     : null;
-  const width = panel ? panel.x + panel.width + PAD : size + 2 * PAD;
+  const width = panel ? panel.x + panel.width + PAD : diagramWidth + 2 * PAD;
   const grainLines = wrapText(process.grain.trim() || 'Grain not declared yet', Math.floor((width - 2 * PAD - 60) / 7.4), 3);
   const bodyBottom = Math.max(TOP + size, panel ? panel.y + panel.height : 0);
   const footerY = bodyBottom + 20;
-  const height = footerY + 30 + grainLines.length * 18 + 40;
+  // The additivity key shares the colour key's line when there is room, else it gets its own line.
+  const oneLine = width - 2 * PAD >= LEGEND_KEY_W + 24 + LEGEND_ADDITIVITY_W;
+  const extraLine = panel && !oneLine ? 18 : 0;
+  const height = footerY + 30 + grainLines.length * 18 + 40 + extraLine;
+  const keyY = height - 18 - extraLine;
+  const legend = { keyY, additivityY: panel ? (oneLine ? keyY : keyY + 18) : null };
 
   return {
     width: Math.ceil(width),
@@ -115,6 +128,7 @@ export function layoutBubble(project: KimballProject, process: BusinessProcess, 
     panel,
     grainLines,
     footerY,
+    legend,
   };
 }
 
@@ -126,7 +140,12 @@ const ADDITIVITY_SHORT = { additive: 'A', 'semi-additive': 'SA', 'non-additive':
 export function bubbleToSvg(
   project: KimballProject,
   process: BusinessProcess,
-  options: BubbleOptions & { theme?: ThemeName; background?: boolean } = {},
+  options: BubbleOptions & {
+    theme?: ThemeName;
+    background?: boolean;
+    /** In the app: each dimension bubble is a focusable button (the picture becomes a group). Exports stay images. */
+    interactive?: boolean;
+  } = {},
 ): string {
   const theme = options.theme ?? 'light';
   const c = PALETTES[theme];
@@ -142,7 +161,7 @@ export function bubbleToSvg(
     .map((nd) => `${nd.label}${nd.roles.length ? ` (${nd.roles.join(', ')})` : ''}${nd.conformed ? ' [conformed]' : ''}`)
     .join('; ');
   out.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.width} ${L.height}" width="${L.width}" height="${L.height}" role="img" aria-labelledby="kd-title kd-desc" font-family="${t(FONT_SANS)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.width} ${L.height}" width="${L.width}" height="${L.height}" role="${options.interactive ? 'group' : 'img'}" aria-labelledby="kd-title kd-desc" font-family="${t(FONT_SANS)}">`,
     `<title id="kd-title">Bubble diagram: ${t(name)}</title>`,
     `<desc id="kd-desc">Business process ${t(name)}${typeLabel ? ` (${t(typeLabel.toLowerCase())} fact table)` : ''}. Grain: ${t(process.grain || 'not declared')}. Dimensions: ${t(dimList || 'none')}.</desc>`,
   );
@@ -179,11 +198,14 @@ export function bubbleToSvg(
     const lineH = 15;
     const startY = nd.y - ((nd.lines.length - 1) * lineH) / 2 + 4.5;
     out.push(
-      `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}">`,
+      options.interactive
+        ? // The name contains the visible text (label, then roles) so speech input and screen readers agree.
+          `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}" tabindex="0" role="button" aria-label="Open dimension ${t(nd.label)}${nd.roles.length ? ` ${t(nd.roles.join(' · '))}` : ''}">`
+        : `<g class="kd-dim" data-dimension-id="${t(nd.dimensionId)}">`,
       `<title>${t(nd.label)}${nd.conformed ? ' — conformed' : ''}${nd.roles.length ? ` — roles: ${t(nd.roles.join(', '))}` : ''}</title>`,
       `<circle cx="${nd.x}" cy="${nd.y}" r="${nd.r}" fill="${nd.conformed ? c.conformedSoft : c.dimSoft}" stroke="${stroke}" stroke-width="${nd.conformed ? 3 : 2}"${nd.kind === 'degenerate' ? ' stroke-dasharray="5 4"' : ''}/>`,
       `<text text-anchor="middle" font-size="12.5" font-weight="600" fill="${c.ink}">` +
-        nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round(startY + i * lineH)}">${t(ln)}</tspan>`).join('') +
+        nd.lines.map((ln, i) => `<tspan x="${nd.x}" y="${round(startY + i * lineH)}">${t(ln)}</tspan>`).join(' ') +
         '</text>',
     );
     if (nd.roles.length) {
@@ -242,13 +264,17 @@ export function bubbleToSvg(
   );
 
   // Legend
-  const ly = L.height - 18;
+  const ly = L.legend.keyY;
   out.push(
     `<g font-size="11" fill="${c.muted}">`,
     `<circle cx="${PAD + 6}" cy="${ly - 4}" r="6" fill="${centerFill}"/><text x="${PAD + 18}" y="${ly}">Business process</text>`,
     `<circle cx="${PAD + 132}" cy="${ly - 4}" r="6" fill="${c.dimSoft}" stroke="${c.dim}" stroke-width="2"/><text x="${PAD + 144}" y="${ly}">Dimension</text>`,
     `<circle cx="${PAD + 228}" cy="${ly - 4}" r="6" fill="${c.conformedSoft}" stroke="${c.conformed}" stroke-width="2.5"/><text x="${PAD + 240}" y="${ly}">Conformed (2+ processes)</text>`,
-    L.panel ? `<text x="${L.width - PAD}" y="${ly}" text-anchor="end">A additive · SA semi-additive · NA non-additive</text>` : '',
+    L.legend.additivityY !== null
+      ? L.legend.additivityY === ly
+        ? `<text x="${L.width - PAD}" y="${ly}" text-anchor="end">A additive · SA semi-additive · NA non-additive</text>`
+        : `<text x="${PAD}" y="${L.legend.additivityY}">A additive · SA semi-additive · NA non-additive</text>`
+      : '',
     '</g>',
     '</svg>',
   );

@@ -501,7 +501,7 @@ export function Menu({ label, icon, children }: { label: string; icon?: ReactNod
         }}
       >
         {icon}
-        <span>{label}</span>
+        <span className="menu-trigger-label">{label}</span>
       </button>
       {open && (
         <div className="menu-list" role="menu" aria-label={label}>
